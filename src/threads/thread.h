@@ -95,6 +95,11 @@ struct thread
 
     int64_t blocked_ticks;              /* time blocked. */
 
+	struct list acquired_locks;
+	struct lock *lock_waiting;
+
+	int real_priority;
+
 #ifdef USERPROG
     /* Owned by userprog/process.c. */
     uint32_t *pagedir;                  /* Page directory. */
