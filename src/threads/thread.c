@@ -327,17 +327,19 @@ void thread_set_priority(int new_priority)
 {
   struct list_elem *e;
   struct lock *l;
-  if(list_empty(&thread_current()->acquired_locks))
+  if (list_empty(&thread_current()->acquired_locks))
     thread_current()->priority = new_priority;
-  else if (new_priority > l->max_priority)
+  else
   {
     e = list_front(&thread_current()->acquired_locks);
     l = list_entry(e, struct lock, elem);
-    thread_current()->priority = new_priority;
+    if (new_priority > l->max_priority)
+    {
+      thread_current()->priority = new_priority;
+    }
+    else
+      thread_current()->priority = l->max_priority;
   }
-  else
-    thread_current()->priority = l->max_priority;
-
   thread_current()->real_priority = new_priority;
   thread_yield();
 }
