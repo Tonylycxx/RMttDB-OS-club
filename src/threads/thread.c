@@ -599,9 +599,9 @@ void thread_blocked_check(struct thread *t, void *aux UNUSED)
 
 bool thread_priority_cmp(const struct list_elem *a, const struct list_elem *b)
 {
-  struct thread *ta = list_entry(a, struct thread, elem);
-  struct thread *tb = list_entry(b, struct thread, elem);
-  return ta->priority > tb->priority;
+  struct thread *a_ = list_entry(a, struct thread, elem);
+  struct thread *b_ = list_entry(b, struct thread, elem);
+  return a_->priority > b_->priority;
 }
 
 /* Offset of `stack' member within `struct thread'.
