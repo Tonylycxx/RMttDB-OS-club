@@ -113,6 +113,7 @@ void sema_up(struct semaphore *sema)
     thread_unblock(list_entry(list_pop_front(&sema->waiters),
                               struct thread, elem));
   sema->value++;
+  thread_yield();
   intr_set_level(old_level);
 }
 
@@ -248,8 +249,6 @@ void lock_release(struct lock *lock)
   ASSERT(lock_held_by_current_thread(lock));
 
   lock->holder = NULL;
-  sema_up(&lock->semaphore);
-
   list_remove(&lock->elem);
   lock->max_priority = 0;
 
@@ -262,6 +261,9 @@ void lock_release(struct lock *lock)
     else
       thread_current()->priority = lock_->max_priority;
   }
+  else
+    thread_current()->priority = thread_current()->real_priority;
+  sema_up(&lock->semaphore);
 }
 
 /* Returns true if the current thread holds LOCK, false
