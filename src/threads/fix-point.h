@@ -1,3 +1,5 @@
+#include <stdint.h>
+
 #define FIX_POINT_FLAG_P 17
 #define FIX_POINT_FLAG_Q 31 - FIX_POINT_FLAG_P
 
@@ -12,3 +14,9 @@
 
 #define add_fixed_int(x, n) x + n *FIX_POINT_FLAG_F
 #define sub_fixed_int(x, n) x - n *FIX_POINT_FLAG_F
+
+#define mul_fixed_fixed(x, y) ((int64_t)x) * y / FIX_POINT_FLAG_F
+#define mul_fixed_int(x, n) x *n
+
+#define div_fixed_fixed(x, y) ((int64_t)x) * f / y
+#define div_fixed_int(x, n) x / n
