@@ -167,7 +167,9 @@ timer_interrupt(struct intr_frame *args UNUSED)
 {
   ticks++;
   thread_tick();
-
+  // if mlfqs
+  if (timer_ticks() % TIMER_FREQ == 0)
+    thread_set_load_avg();
   /* for each thread, check whether it should be unblocked. */
   thread_foreach(thread_blocked_check, NULL);
 }

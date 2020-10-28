@@ -58,6 +58,7 @@ static unsigned thread_ticks; /* # of timer ticks since last yield. */
    If true, use multi-level feedback queue scheduler.
    Controlled by kernel command-line option "-o mlfqs". */
 bool thread_mlfqs;
+int load_avg;
 
 static void kernel_thread(thread_func *, void *aux);
 
@@ -351,16 +352,15 @@ int thread_get_priority(void)
 }
 
 /* Sets the current thread's nice value to NICE. */
-void thread_set_nice(int nice UNUSED)
+void thread_set_nice(int nice)
 {
-  /* Not yet implemented. */
+  thread_current()->nice = nice;
 }
 
 /* Returns the current thread's nice value. */
 int thread_get_nice(void)
 {
-  /* Not yet implemented. */
-  return 0;
+  return thread_current()->nice;
 }
 
 /* Returns 100 times the system load average. */
@@ -370,11 +370,16 @@ int thread_get_load_avg(void)
   return 0;
 }
 
+void thread_set_load_avg(void)
+{
+  
+}
+
+
 /* Returns 100 times the current thread's recent_cpu value. */
 int thread_get_recent_cpu(void)
 {
-  /* Not yet implemented. */
-  return 0;
+  return 100 * thread_current()->recent_cpu;
 }
 
 /* Idle thread.  Executes when no other thread is ready to run.
@@ -472,6 +477,8 @@ init_thread(struct thread *t, const char *name, int priority)
   list_init(&t->acquired_locks);
   t->lock_waiting = NULL;
   t->real_priority = priority;
+  t->nice = 0;
+  t->recent_cpu = 0;
 
   old_level = intr_disable();
   list_push_back(&all_list, &t->allelem);
