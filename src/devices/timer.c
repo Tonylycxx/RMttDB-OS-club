@@ -177,10 +177,10 @@ timer_interrupt(struct intr_frame *args UNUSED)
     }
     if (timer_ticks() % 4 == 0)
       thread_set_all_priority();
+      // thread_update_priority(thread_current());
   }
   /* for each thread, check whether it should be unblocked. */
   thread_foreach(thread_blocked_check, NULL);
-  thread_yield();
 }
 
 /* Returns true if LOOPS iterations waits for more than one timer
