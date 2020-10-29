@@ -11,6 +11,7 @@
 #include "threads/switch.h"
 #include "threads/synch.h"
 #include "threads/vaddr.h"
+#include "threads/fix-point.h"
 #ifdef USERPROG
 #include "userprog/process.h"
 #endif
@@ -345,6 +346,16 @@ void thread_set_priority(int new_priority)
   thread_yield();
 }
 
+void thread_set_all_priority(void)
+{
+  thread_foreach((thread_action_func *)thread_update_priority, NULL);
+}
+
+void thread_update_priority(struct thread *t)
+{
+  t->priority = fixed2int_toward_zero(sub_fixed_int(sub_fixed_fixed(int2fixed(PRI_MAX), div_fixed_int(t->recent_cpu, 4)), t->nice * 2));
+}
+
 /* Returns the current thread's priority. */
 int thread_get_priority(void)
 {
@@ -355,6 +366,8 @@ int thread_get_priority(void)
 void thread_set_nice(int nice)
 {
   thread_current()->nice = nice;
+  thread_set_all_priority();
+  thread_yield();
 }
 
 /* Returns the current thread's nice value. */
@@ -366,20 +379,42 @@ int thread_get_nice(void)
 /* Returns 100 times the system load average. */
 int thread_get_load_avg(void)
 {
-  /* Not yet implemented. */
-  return 0;
+  return fixed2int_to_nearest(mul_fixed_int(load_avg, 100));
 }
 
 void thread_set_load_avg(void)
 {
-  
+  int ready_threads = (int)list_size(&ready_list);
+  if (thread_current() != idle_thread)
+    ready_threads++;
+  int fixed_59 = int2fixed(59);
+  int fixed_60 = int2fixed(60);
+  int fixed_1 = int2fixed(1);
+  ready_threads = int2fixed(ready_threads);
+  load_avg = add_fixed_fixed(mul_fixed_fixed(div_fixed_fixed(fixed_59, fixed_60), load_avg),
+                             mul_fixed_fixed(div_fixed_fixed(fixed_1, fixed_60), ready_threads));
 }
-
 
 /* Returns 100 times the current thread's recent_cpu value. */
 int thread_get_recent_cpu(void)
 {
-  return 100 * thread_current()->recent_cpu;
+  return fixed2int_to_nearest(mul_fixed_int(thread_current()->recent_cpu, 100));
+}
+
+void thread_set_all_recent_cpu(void)
+{
+  thread_foreach((thread_action_func *)thread_set_recent_cpu, NULL);
+}
+
+void thread_set_recent_cpu(struct thread *t)
+{
+  t->recent_cpu = add_fixed_int(mul_fixed_fixed(div_fixed_fixed(mul_fixed_int(2, load_avg), add_fixed_int(mul_fixed_int(2, load_avg), 1)), t->recent_cpu), t->nice);
+}
+
+void thread_inc_running_thread(void)
+{
+  if (thread_current() != idle_thread)
+    thread_current()->recent_cpu = add_fixed_int(thread_current()->recent_cpu, 1);
 }
 
 /* Idle thread.  Executes when no other thread is ready to run.

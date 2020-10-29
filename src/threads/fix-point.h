@@ -18,5 +18,5 @@
 #define mul_fixed_fixed(x, y) ((int64_t)x) * y / FIX_POINT_FLAG_F
 #define mul_fixed_int(x, n) x *n
 
-#define div_fixed_fixed(x, y) ((int64_t)x) * f / y
+#define div_fixed_fixed(x, y) ((int64_t)x) * FIX_POINT_FLAG_F / y
 #define div_fixed_int(x, n) x / n

@@ -167,11 +167,20 @@ timer_interrupt(struct intr_frame *args UNUSED)
 {
   ticks++;
   thread_tick();
-  // if mlfqs
-  if (timer_ticks() % TIMER_FREQ == 0)
-    thread_set_load_avg();
+  if (thread_mlfqs)
+  {
+    thread_inc_running_thread();
+    if (timer_ticks() % TIMER_FREQ == 0)
+    {
+      thread_set_load_avg();
+      thread_set_all_recent_cpu();
+    }
+    if (timer_ticks() % 4 == 0)
+      thread_set_all_priority();
+  }
   /* for each thread, check whether it should be unblocked. */
   thread_foreach(thread_blocked_check, NULL);
+  thread_yield();
 }
 
 /* Returns true if LOOPS iterations waits for more than one timer
