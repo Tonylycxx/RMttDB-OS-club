@@ -352,17 +352,16 @@ void thread_set_all_priority(void)
   old_level = intr_disable();
 
   thread_foreach((thread_action_func *)thread_update_priority, NULL);
-  list_sort(&ready_list, (list_less_func *) &thread_priority_cmp, NULL);
+  list_sort(&ready_list, (list_less_func *)&thread_priority_cmp, NULL);
 
   intr_set_level(old_level);
 }
 
 void thread_update_priority(struct thread *t)
 {
-  // if (t == idle_thread)
-  //   return;
-  t->priority = fixed2int_toward_zero(sub_fixed_int(sub_fixed_fixed(int2fixed(PRI_MAX), div_fixed_int(t->recent_cpu, 4)), t->nice * 2));
-  // list_sort(&ready_list, (list_less_func *) &thread_priority_cmp, NULL);
+  t->priority = fixed2int_toward_zero(
+      sub_fixed_int(
+          sub_fixed_fixed(int2fixed(PRI_MAX), div_fixed_int(t->recent_cpu, 4)), t->nice * 2));
 }
 
 /* Returns the current thread's priority. */
