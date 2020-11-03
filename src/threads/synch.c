@@ -387,14 +387,16 @@ void cond_broadcast(struct condition *cond, struct lock *lock)
     cond_signal(cond, lock);
 }
 
-bool lock_priority_cmp(const struct list_elem *a, const struct list_elem *b)
+/* Comparable function (list_less_func) used to order each thread's acquired_locks */
+bool lock_priority_cmp(const struct list_elem *a, const struct list_elem *b, void *aux UNUSED)
 {
   struct lock *la = list_entry(a, struct lock, elem);
   struct lock *lb = list_entry(b, struct lock, elem);
   return la->max_priority > lb->max_priority;
 }
 
-bool cond_sem_priority_cmp(const struct list_elem *a, const struct list_elem *b)
+/* Comparable function (list_less_func) used to order condition's waiters */
+bool cond_sem_priority_cmp(const struct list_elem *a, const struct list_elem *b, void *aux UNUSED)
 {
   struct semaphore_elem *a_ = list_entry(a, struct semaphore_elem, elem);
   struct semaphore_elem *b_ = list_entry(b, struct semaphore_elem, elem);

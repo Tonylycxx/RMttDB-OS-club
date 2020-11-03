@@ -649,7 +649,7 @@ void thread_blocked_check(struct thread *t, void *aux UNUSED)
     thread_unblock(t);
 }
 
-bool thread_priority_cmp(const struct list_elem *a, const struct list_elem *b)
+bool thread_priority_cmp(const struct list_elem *a, const struct list_elem *b, void *aux UNUSED)
 {
   struct thread *a_ = list_entry(a, struct thread, elem);
   struct thread *b_ = list_entry(b, struct thread, elem);
