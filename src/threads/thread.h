@@ -97,11 +97,10 @@ struct thread
    int64_t blocked_ticks; /* time blocked. */
 
    struct list acquired_locks; /* List of locks acquired by a thread */
-   struct lock *lock_waiting; /* The lock a thread waits for */
+   struct lock *lock_waiting;  /* The lock a thread waits for */
 
-   int nice;      /* Thread's 'nice' value */
+   int nice;       /* Thread's 'nice' value */
    int recent_cpu; /* Thread's recent  */
-
 
 #ifdef USERPROG
    /* Owned by userprog/process.c. */
@@ -142,7 +141,7 @@ void thread_foreach(thread_action_func *, void *);
 
 int thread_get_priority(void);
 void thread_set_priority(int);
-void thread_set_all_priority(void);  /* Set (update) all ready threads' priority */
+void thread_set_all_priority(void);            /* Set (update) all ready threads' priority */
 void thread_update_priority(struct thread *t); /* Function used in thread_foreach to each thread */
 
 int thread_get_nice(void);
@@ -150,9 +149,9 @@ void thread_set_nice(int);
 int thread_get_recent_cpu(void);
 int thread_get_load_avg(void);
 void thread_set_load_avg(void);
-void thread_set_all_recent_cpu(void); /* Set (update) all ready threads' recent_cpu */
+void thread_set_all_recent_cpu(void);         /* Set (update) all ready threads' recent_cpu */
 void thread_set_recent_cpu(struct thread *t); /* Function used in thread_foreach to each thread */
-void thread_inc_running_thread(void); /* Increase running thread's recent_cpu by 1 (if it's not idle thread) */
+void thread_inc_running_thread(void);         /* Increase running thread's recent_cpu by 1 (if it's not idle thread) */
 
 void thread_blocked_check(struct thread *t, void *aux UNUSED);
 bool thread_priority_cmp(const struct list_elem *a, const struct list_elem *b, void *aux UNUSED);

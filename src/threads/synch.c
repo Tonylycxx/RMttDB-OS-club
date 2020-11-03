@@ -283,7 +283,6 @@ void lock_release(struct lock *lock)
     lock->holder = NULL;
     sema_up(&lock->semaphore);
   }
-  
 }
 
 /* Returns true if the current thread holds LOCK, false
@@ -363,6 +362,7 @@ void cond_signal(struct condition *cond, struct lock *lock UNUSED)
   ASSERT(!intr_context());
   ASSERT(lock_held_by_current_thread(lock));
 
+  /* Sort 'waiters' before pop to realize priority schedule */
   if (!list_empty(&cond->waiters))
   {
     list_sort(&cond->waiters, (list_less_func *)cond_sem_priority_cmp, NULL);
