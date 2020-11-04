@@ -417,10 +417,7 @@ int thread_get_recent_cpu(void)
    since update process cannot be shut down. */
 void thread_set_all_recent_cpu(void)
 {
-  enum intr_level old_level;
-  old_level = intr_disable();
   thread_foreach((thread_action_func *)thread_update_recent_cpu, NULL);
-  intr_set_level(old_level);
 }
 
 /* Used in thread_set_all_recent_cpu on each thread to uddate recent_cpu
