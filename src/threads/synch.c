@@ -206,10 +206,9 @@ void do_chain_donation(struct lock *l)
    reset current threads' lock_waiting and set lock's element 'holder' */
 void do_priority_donation(struct lock *lock)
 {
-  struct lock *l = lock;
-  if (l->holder)
+  if (lock->holder)
   {
-    do_chain_donation(l);
+    do_chain_donation(lock);
     thread_yield();
   }
   sema_down(&lock->semaphore);
@@ -236,8 +235,6 @@ void lock_acquire(struct lock *lock)
   ASSERT(lock != NULL);
   ASSERT(!intr_context());
   ASSERT(!lock_held_by_current_thread(lock));
-
-  struct lock *l = lock;
 
   if (!thread_mlfqs)
     do_priority_donation(lock);
@@ -267,35 +264,47 @@ bool lock_try_acquire(struct lock *lock)
   return success;
 }
 
+/* Remove 'lock' from list acquired_locks and reset its element max_priority
+   
+   Restore current thread's priority to:
+      max(max priority of acquired locks' max_priority, thread's real_priority) */
+void restore_priority(struct lock *lock)
+{
+  lock->holder = NULL;
+  list_remove(&lock->elem);
+  lock->max_priority = 0;
+
+  struct lock *lock_;
+  if (!list_empty(&thread_current()->acquired_locks))
+  {
+    lock_ = list_entry(list_front(&thread_current()->acquired_locks), struct lock, elem);
+    if (thread_current()->real_priority > lock_->max_priority)
+      thread_current()->priority = thread_current()->real_priority;
+    else
+      thread_current()->priority = lock_->max_priority;
+  }
+  else
+    thread_current()->priority = thread_current()->real_priority;
+  sema_up(&lock->semaphore);
+}
+
 /* Releases LOCK, which must be owned by the current thread.
 
    An interrupt handler cannot acquire a lock, so it does not
    make sense to try to release a lock within an interrupt
-   handler. */
+   handler. 
+   
+   If thread_mlfqs is 'false' then means priority-donation should
+   be on (restore_priority called)
+   Otherwise, mlfqs schedule is running, which leads to some smiple
+   actions.*/
 void lock_release(struct lock *lock)
 {
   ASSERT(lock != NULL);
   ASSERT(lock_held_by_current_thread(lock));
 
   if (!thread_mlfqs)
-  {
-    lock->holder = NULL;
-    list_remove(&lock->elem);
-    lock->max_priority = 0;
-
-    struct lock *lock_;
-    if (!list_empty(&thread_current()->acquired_locks))
-    {
-      lock_ = list_entry(list_front(&thread_current()->acquired_locks), struct lock, elem);
-      if (thread_current()->real_priority > lock_->max_priority)
-        thread_current()->priority = thread_current()->real_priority;
-      else
-        thread_current()->priority = lock_->max_priority;
-    }
-    else
-      thread_current()->priority = thread_current()->real_priority;
-    sema_up(&lock->semaphore);
-  }
+    restore_priority(lock);
   else
   {
     lock->holder = NULL;
@@ -408,9 +417,9 @@ void cond_broadcast(struct condition *cond, struct lock *lock)
 /* Comparable function (list_less_func) used to order each thread's acquired_locks */
 bool lock_priority_cmp(const struct list_elem *a, const struct list_elem *b, void *aux UNUSED)
 {
-  struct lock *la = list_entry(a, struct lock, elem);
-  struct lock *lb = list_entry(b, struct lock, elem);
-  return la->max_priority > lb->max_priority;
+  struct lock *a_ = list_entry(a, struct lock, elem);
+  struct lock *b_ = list_entry(b, struct lock, elem);
+  return a_->max_priority > b_->max_priority;
 }
 
 /* Comparable function (list_less_func) used to order condition's waiters */

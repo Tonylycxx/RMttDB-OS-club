@@ -36,6 +36,8 @@ bool lock_held_by_current_thread(const struct lock *);
 void do_priority_donation(struct lock *lock);
 void do_chain_donation(struct lock *l);
 
+void restore_priority(struct lock *lock);
+
 /* Condition variable. */
 struct condition
 {
