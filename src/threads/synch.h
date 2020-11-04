@@ -33,6 +33,9 @@ bool lock_try_acquire(struct lock *);
 void lock_release(struct lock *);
 bool lock_held_by_current_thread(const struct lock *);
 
+void do_priority_donation(struct lock *lock);
+void do_chain_donation(struct lock *l);
+
 /* Condition variable. */
 struct condition
 {
@@ -44,8 +47,8 @@ void cond_wait(struct condition *, struct lock *);
 void cond_signal(struct condition *, struct lock *);
 void cond_broadcast(struct condition *, struct lock *);
 
-bool lock_priority_cmp(const struct list_elem *a, const struct list_elem *b, void *aux UNUSED);
-bool cond_sem_priority_cmp(const struct list_elem *a, const struct list_elem *b, void *aux UNUSED);
+bool lock_priority_cmp(const struct list_elem *a, const struct list_elem *b, void *aux);
+bool cond_sem_priority_cmp(const struct list_elem *a, const struct list_elem *b, void *aux);
 
 /* Optimization barrier.
 

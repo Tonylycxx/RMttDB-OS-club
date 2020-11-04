@@ -181,6 +181,43 @@ void lock_init(struct lock *lock)
   sema_init(&lock->semaphore, 1);
 }
 
+/* Recursively do priority donation to solve hierarchy lock-priority problem */
+void do_chain_donation(struct lock *l)
+{
+  thread_current()->lock_waiting = l;
+  while (l)
+  {
+    if (l->holder->priority < thread_current()->priority)
+    {
+      l->holder->priority = thread_current()->priority;
+      l->max_priority = thread_current()->priority;
+      list_remove(&l->elem);
+      list_insert_ordered(&l->holder->acquired_locks, &l->elem, &lock_priority_cmp, NULL);
+      l = l->holder->lock_waiting;
+    }
+    else
+      return;
+  }
+}
+
+/* Do chain donation if lock has been acquired by other threads.
+   
+   Otherwise acquire the lock, insert lock to list acquired_locks,
+   reset current threads' lock_waiting and set lock's element 'holder' */
+void do_priority_donation(struct lock *lock)
+{
+  struct lock *l = lock;
+  if (l->holder)
+  {
+    do_chain_donation(l);
+    thread_yield();
+  }
+  sema_down(&lock->semaphore);
+  list_insert_ordered(&thread_current()->acquired_locks, &lock->elem, &lock_priority_cmp, NULL);
+  thread_current()->lock_waiting = NULL;
+  lock->holder = thread_current();
+}
+
 /* Acquires LOCK, sleeping until it becomes available if
    necessary.  The lock must not already be held by the current
    thread.
@@ -188,7 +225,12 @@ void lock_init(struct lock *lock)
    This function may sleep, so it must not be called within an
    interrupt handler.  This function may be called with
    interrupts disabled, but interrupts will be turned back on if
-   we need to sleep. */
+   we need to sleep. 
+   
+   If thread_mlfqs is 'false' then means priority-donation should
+   be on (do_priority_donation called)
+   Otherwise, mlfqs schedule is running, which leads to some smiple
+   actions. */
 void lock_acquire(struct lock *lock)
 {
   ASSERT(lock != NULL);
@@ -198,31 +240,7 @@ void lock_acquire(struct lock *lock)
   struct lock *l = lock;
 
   if (!thread_mlfqs)
-  {
-    if (l->holder)
-    {
-      thread_current()->lock_waiting = l;
-
-      while (l)
-      {
-        if (l->holder->priority < thread_current()->priority)
-        {
-          l->holder->priority = thread_current()->priority;
-          l->max_priority = thread_current()->priority;
-          list_remove(&l->elem);
-          list_insert_ordered(&l->holder->acquired_locks, &l->elem, (list_less_func *)&lock_priority_cmp, NULL);
-          l = l->holder->lock_waiting;
-        }
-        else
-          break;
-      }
-      thread_yield();
-    }
-    sema_down(&lock->semaphore);
-    list_insert_ordered(&thread_current()->acquired_locks, &lock->elem, (list_less_func *)&lock_priority_cmp, NULL);
-    thread_current()->lock_waiting = NULL;
-    lock->holder = thread_current();
-  }
+    do_priority_donation(lock);
   else
   {
     sema_down(&lock->semaphore);
@@ -365,7 +383,7 @@ void cond_signal(struct condition *cond, struct lock *lock UNUSED)
   /* Sort 'waiters' before pop to realize priority schedule */
   if (!list_empty(&cond->waiters))
   {
-    list_sort(&cond->waiters, (list_less_func *)cond_sem_priority_cmp, NULL);
+    list_sort(&cond->waiters, &cond_sem_priority_cmp, NULL);
     sema_up(&list_entry(list_pop_front(&cond->waiters),
                         struct semaphore_elem, elem)
                  ->semaphore);
