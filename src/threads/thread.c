@@ -353,6 +353,7 @@ void thread_set_all_priority(void)
   old_level = intr_disable();
 
   thread_foreach((thread_action_func *)thread_update_priority, NULL);
+  // thread_update_priority(thread_current());
   list_sort(&ready_list, (list_less_func *)&thread_priority_cmp, NULL);
 
   intr_set_level(old_level);
