@@ -161,24 +161,34 @@ void timer_print_stats(void)
   printf("Timer: %" PRId64 " ticks\n", timer_ticks());
 }
 
-/* Timer interrupt handler. */
+/* Mlfqs-schedule:
+   
+   If TIMER_FREQ ticks passed, calculate and store load_avg firstly
+   then set all threads' recent_cpu
+   
+   Set all threads' priority if necessary. */
+void do_mlfqs_shedule(void)
+{
+  thread_inc_running_thread();
+  if (timer_ticks() % TIMER_FREQ == 0)
+  {
+    thread_set_load_avg();
+    thread_set_all_recent_cpu();
+  }
+  if (timer_ticks() % 4 == 0)
+    thread_set_all_priority();
+}
+
+/* Timer interrupt handler. 
+
+   If thread_mlfqs is true, run do_mlfqs_shedule.*/
 static void
 timer_interrupt(struct intr_frame *args UNUSED)
 {
   ticks++;
   thread_tick();
   if (thread_mlfqs)
-  {
-    thread_inc_running_thread();
-    if (timer_ticks() % TIMER_FREQ == 0)
-    {
-      thread_set_load_avg();
-      thread_set_all_recent_cpu();
-    }
-    if (timer_ticks() % 4 == 0)
-      thread_set_all_priority();
-      // thread_update_priority(thread_current());
-  }
+    do_mlfqs_shedule();
   /* for each thread, check whether it should be unblocked. */
   thread_foreach(thread_blocked_check, NULL);
 }

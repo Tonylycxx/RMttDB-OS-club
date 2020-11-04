@@ -345,6 +345,8 @@ void thread_set_priority(int new_priority)
   thread_yield();
 }
 
+/* Set (update) all threads' priority, interrupt should be off
+   since update process cannot be shut down. */
 void thread_set_all_priority(void)
 {
   enum intr_level old_level;
@@ -356,6 +358,7 @@ void thread_set_all_priority(void)
   intr_set_level(old_level);
 }
 
+/* Used in thread_foreach on each thread to update priority */
 void thread_update_priority(struct thread *t)
 {
   t->priority = fixed2int_toward_zero(
@@ -369,11 +372,13 @@ int thread_get_priority(void)
   return thread_current()->priority;
 }
 
-/* Sets the current thread's nice value to NICE. */
+/* Sets the current thread's nice value to NICE. 
+
+   Then update ready_list to schedule.*/
 void thread_set_nice(int nice)
 {
   thread_current()->nice = nice;
-  thread_set_all_priority();
+  thread_update_priority(thread_current());
   thread_yield();
 }
 
@@ -408,19 +413,28 @@ int thread_get_recent_cpu(void)
   return fixed2int_to_nearest(mul_fixed_int(thread_current()->recent_cpu, 100));
 }
 
+/* Set (update) all ready threads' priority, interrupt should be off
+   since update process cannot be shut down. */
 void thread_set_all_recent_cpu(void)
 {
   enum intr_level old_level;
   old_level = intr_disable();
-  thread_foreach((thread_action_func *)thread_set_recent_cpu, NULL);
+  thread_foreach((thread_action_func *)thread_update_recent_cpu, NULL);
   intr_set_level(old_level);
 }
 
-void thread_set_recent_cpu(struct thread *t)
+/* Used in thread_set_all_recent_cpu on each thread to uddate recent_cpu
+
+   Or update thread which nice value has just changed */
+void thread_update_recent_cpu(struct thread *t)
 {
-  t->recent_cpu = add_fixed_int(mul_fixed_fixed(div_fixed_fixed(mul_fixed_int(2, load_avg), add_fixed_int(mul_fixed_int(2, load_avg), 1)), t->recent_cpu), t->nice);
+  t->recent_cpu = add_fixed_int(
+      mul_fixed_fixed(
+          div_fixed_fixed(mul_fixed_int(2, load_avg), add_fixed_int(mul_fixed_int(2, load_avg), 1)), t->recent_cpu),
+      t->nice);
 }
 
+/* Increse currently running thread's recent cpu by 1 */
 void thread_inc_running_thread(void)
 {
   if (thread_current() != idle_thread)
