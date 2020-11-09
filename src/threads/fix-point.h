@@ -1,3 +1,5 @@
+/* This file is used to help floating calculation in pintos' kernel */
+
 #include <stdint.h>
 
 #define FIX_POINT_FLAG_P 17
