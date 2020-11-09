@@ -167,7 +167,7 @@ void timer_print_stats(void)
    then set all threads' recent_cpu
    
    Set all threads' priority if necessary. */
-void do_mlfqs_shedule(void)
+void do_mlfqs_schedule(void)
 {
   thread_inc_running_thread();
   if (timer_ticks() % TIMER_FREQ == 0)
@@ -181,14 +181,14 @@ void do_mlfqs_shedule(void)
 
 /* Timer interrupt handler. 
 
-   If thread_mlfqs is true, run do_mlfqs_shedule.*/
+   If thread_mlfqs is true, run do_mlfqs_schedule.*/
 static void
 timer_interrupt(struct intr_frame *args UNUSED)
 {
   ticks++;
   thread_tick();
   if (thread_mlfqs)
-    do_mlfqs_shedule();
+    do_mlfqs_schedule();
   /* for each thread, check whether it should be unblocked. */
   thread_foreach(thread_blocked_check, NULL);
 }
