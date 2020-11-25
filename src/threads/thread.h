@@ -95,6 +95,8 @@ struct thread
 
     int64_t blocked_ticks;
 
+    int ret_val;
+
 #ifdef USERPROG
     /* Owned by userprog/process.c. */
     uint32_t *pagedir;                  /* Page directory. */
