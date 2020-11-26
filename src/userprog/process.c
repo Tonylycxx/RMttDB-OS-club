@@ -42,6 +42,7 @@ process_execute (const char *file_name)
   char *exec_name, *save_ptr;
   exec_name = strtok_r(fn_copy, " ", &save_ptr);
 
+
   tid = thread_create (exec_name, PRI_DEFAULT, start_process, fn_copy);
   if (tid == TID_ERROR)
     palloc_free_page (fn_copy); 
@@ -131,7 +132,7 @@ start_process (void *file_name_)
 int
 process_wait (tid_t child_tid UNUSED) 
 {
-  while(true);
+  sema_down(thread_current()->waitChild);
 }
 
 /* Free the current process's resources. */

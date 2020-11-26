@@ -183,6 +183,8 @@ thread_create (const char *name, int priority,
   init_thread (t, name, priority);
   tid = t->tid = allocate_tid ();
 
+  t->parentThread = thread_current();
+
   /* Stack frame for kernel_thread(). */
   kf = alloc_frame (t, sizeof *kf);
   kf->eip = NULL;
@@ -292,6 +294,7 @@ thread_exit (void)
   intr_disable ();
   list_remove (&thread_current()->allelem);
   thread_current ()->status = THREAD_DYING;
+  sema_up(thread_current()->parentThread->waitChild);
   schedule ();
   NOT_REACHED ();
 }
@@ -463,6 +466,8 @@ init_thread (struct thread *t, const char *name, int priority)
   t->stack = (uint8_t *) t + PGSIZE;
   t->priority = priority;
   t->blocked_ticks = 0;
+  sema_init(t->waitChild, 1);
+  t->parentThread = NULL;
   t->magic = THREAD_MAGIC;
 
   old_level = intr_disable ();
