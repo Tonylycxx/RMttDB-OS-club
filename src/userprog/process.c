@@ -28,7 +28,7 @@ static bool load (const char *cmdline, void (**eip) (void), void **esp);
 tid_t
 process_execute (const char *file_name) 
 {
-  char *fn_copy;
+  char *fn_copy, *fn_copy2;
   tid_t tid;
 
   /* Make a copy of FILE_NAME.
@@ -37,15 +37,21 @@ process_execute (const char *file_name)
   if (fn_copy == NULL)
     return TID_ERROR;
   strlcpy (fn_copy, file_name, PGSIZE);
+  fn_copy2 = palloc_get_page (0);
+  if (fn_copy2 == NULL)
+    return TID_ERROR;
+  strlcpy (fn_copy2, file_name, PGSIZE);
 
   /* Create a new thread to execute FILE_NAME. */
   char *exec_name, *save_ptr;
   exec_name = strtok_r(fn_copy, " ", &save_ptr);
 
-
-  tid = thread_create (exec_name, PRI_DEFAULT, start_process, fn_copy);
+  tid = thread_create (exec_name, PRI_DEFAULT, start_process, fn_copy2);
   if (tid == TID_ERROR)
+  {
+    palloc_free_page (fn_copy2);
     palloc_free_page (fn_copy); 
+  }
   return tid;
 }
 
@@ -64,16 +70,23 @@ start_process (void *file_name_)
   if_.cs = SEL_UCSEG;
   if_.eflags = FLAG_IF | FLAG_MBS;
 
+  char *fn_copy;
+  fn_copy = palloc_get_page (0);
+  if (fn_copy == NULL)
+    return TID_ERROR;
+  strlcpy (fn_copy, file_name, PGSIZE);
+
+  char *exec_name, *save_ptr0;
+  exec_name = strtok_r(file_name, " ", &save_ptr0);
+
+  success = load (exec_name, &if_.eip, &if_.esp);
+
   char *token, *save_ptr;
-  token = strtok_r(file_name, " ", &save_ptr);
-
-  success = load (token, &if_.eip, &if_.esp);
-
   char *esp = (char *)if_.esp;
   char *argv[128];
   int i = 0;
   int j = 0;
-  for(;token != NULL;token = strtok_r (NULL, " ", &save_ptr))
+  for(token = strtok_r(fn_copy, " ", &save_ptr);token != NULL;token = strtok_r (NULL, " ", &save_ptr))
   {
     esp = esp - (strlen(token) + 1);
     strlcpy(esp, token, strlen(token) + 1);
@@ -81,15 +94,20 @@ start_process (void *file_name_)
   }
 
   //word align
-  int count = (int)esp % 4 + 4;
-  esp -= count;
-  memset(esp, 0, count);
+  while((int)esp % 4)
+  {
+    esp--;
+    *esp = '\0';
+  }
+  esp -= 4;
+  *(int *)esp = 0;
 
   //save pointer
   for(j = i - 1; j >= 0; j--)
   {
     esp -= 4;
-    strlcpy(esp, argv[j], strlen(argv[j]) + 1);
+    //strlcpy(esp, &argv[j], strlen(argv[j]) + 1);
+    *(int *)esp = argv[j];
   }
 
   //save argv and argc
@@ -97,7 +115,6 @@ start_process (void *file_name_)
   *(int *)esp = esp + 4;
   esp -= 4;
   *(int *)esp = i;
-
 
   //save return address
   esp -= 4;
