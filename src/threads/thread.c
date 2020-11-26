@@ -294,7 +294,7 @@ thread_exit (void)
   intr_disable ();
   list_remove (&thread_current()->allelem);
   thread_current ()->status = THREAD_DYING;
-  sema_up(thread_current()->parentThread->waitChild);
+  sema_up(&thread_current()->parentThread->waitChild);
   schedule ();
   NOT_REACHED ();
 }
@@ -466,7 +466,7 @@ init_thread (struct thread *t, const char *name, int priority)
   t->stack = (uint8_t *) t + PGSIZE;
   t->priority = priority;
   t->blocked_ticks = 0;
-  sema_init(t->waitChild, 1);
+  sema_init(&t->waitChild, 1);
   t->parentThread = NULL;
   t->magic = THREAD_MAGIC;
 

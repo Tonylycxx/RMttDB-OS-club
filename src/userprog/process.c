@@ -132,7 +132,7 @@ start_process (void *file_name_)
 int
 process_wait (tid_t child_tid UNUSED) 
 {
-  sema_down(thread_current()->waitChild);
+  sema_down(&thread_current()->waitChild);
 }
 
 /* Free the current process's resources. */

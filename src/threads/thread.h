@@ -97,7 +97,7 @@ struct thread
    int64_t blocked_ticks;
 
    int ret_val;                 /*  */
-   struct semaphore *waitChild; /*  */
+   struct semaphore waitChild; /*  */
    struct thread *parentThread; /*  */
 
 #ifdef USERPROG
