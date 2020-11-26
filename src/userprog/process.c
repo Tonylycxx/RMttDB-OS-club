@@ -69,7 +69,7 @@ start_process (void *file_name_)
   success = load (token, &if_.eip, &if_.esp);
 
   char *esp = (char *)if_.esp;
-  char *argv[1024];
+  char *argv[128];
   int i = 0;
   int j = 0;
   for(;token != NULL;token = strtok_r (NULL, " ", &save_ptr))
@@ -131,7 +131,7 @@ start_process (void *file_name_)
 int
 process_wait (tid_t child_tid UNUSED) 
 {
-  return -1;
+  while(true);
 }
 
 /* Free the current process's resources. */
