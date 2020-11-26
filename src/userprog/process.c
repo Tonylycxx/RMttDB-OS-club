@@ -76,45 +76,39 @@ start_process (void *file_name_)
     return TID_ERROR;
   strlcpy (fn_copy, file_name, PGSIZE);
 
-  char *exec_name, *save_ptr0;
-  exec_name = strtok_r(file_name, " ", &save_ptr0);
+  char *exec_name, *save_ptr;
+  exec_name = strtok_r(file_name, " ", &save_ptr);
 
   success = load (exec_name, &if_.eip, &if_.esp);
 
-  char *token, *save_ptr;
+  char *token;
   char *esp = (char *)if_.esp;
   char *argv[128];
-  int i = 0;
-  int j = 0;
+  int argc = 0;
   for(token = strtok_r(fn_copy, " ", &save_ptr);token != NULL;token = strtok_r (NULL, " ", &save_ptr))
   {
     esp = esp - (strlen(token) + 1);
     strlcpy(esp, token, strlen(token) + 1);
-    argv[i++] = esp;
+    argv[argc++] = esp;
   }
 
   //word align
-  while((int)esp % 4)
-  {
-    esp--;
-    *esp = '\0';
-  }
-  esp -= 4;
-  *(int *)esp = 0;
+  size_t size = (unsigned int) esp % 4 + 4;
+  esp -= size;
+  memset(esp, 0, size);
 
   //save pointer
-  for(j = i - 1; j >= 0; j--)
+  for(int i = argc - 1; i >= 0; i--)
   {
     esp -= 4;
-    //strlcpy(esp, &argv[j], strlen(argv[j]) + 1);
-    *(int *)esp = argv[j];
+    *(int *)esp = argv[i];
   }
 
   //save argv and argc
   esp -= 4;
   *(int *)esp = esp + 4;
   esp -= 4;
-  *(int *)esp = i;
+  *(int *)esp = argc;
 
   //save return address
   esp -= 4;
