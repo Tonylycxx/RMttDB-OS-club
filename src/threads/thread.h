@@ -97,8 +97,9 @@ struct thread
    int64_t blocked_ticks;
 
    int ret_val;                 /*  */
-   struct semaphore waitChild; /*  */
+   // struct semaphore waitChild; /*  */
    struct thread *parentThread; /*  */
+   struct list child_list;
 
 #ifdef USERPROG
    /* Owned by userprog/process.c. */
@@ -108,6 +109,14 @@ struct thread
    /* Owned by thread.c. */
    unsigned magic; /* Detects stack overflow. */
 };
+
+struct saved_child
+{
+   tid_t tid;
+   int ret_val;
+   struct list_elem elem;
+   struct semaphore sema;
+}
 
 /* If false (default), use round-robin scheduler.
    If true, use multi-level feedback queue scheduler.

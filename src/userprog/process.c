@@ -132,9 +132,21 @@ start_process(void *pcb)
 
    This function will be implemented in problem 2-2.  For now, it
    does nothing. */
-int process_wait(tid_t child_tid UNUSED)
+int process_wait(tid_t child_tid)
 {
-  sema_down(&thread_current()->waitChild);
+  // sema_down(&thread_current()->waitChild);
+  struct list_elem *e;
+  for (e = list_begin (&thread_current()->child_list); e != list_end (&thread_current()->child_list);
+       e = list_next (e))
+    {
+      struct saved_child *child = list_entry (e, struct saved_child, elem);
+      if(child->tid == child_tid)
+      {
+        sema_down(&child->sema);
+        return child->ret_val;
+      }
+    }
+  return -1;
 }
 
 /* Free the current process's resources. */
