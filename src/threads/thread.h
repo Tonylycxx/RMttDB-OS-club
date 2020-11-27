@@ -116,12 +116,13 @@ struct saved_child
    int ret_val;
    struct list_elem elem;
    struct semaphore sema;
-}
+};
+
 
 /* If false (default), use round-robin scheduler.
    If true, use multi-level feedback queue scheduler.
    Controlled by kernel command-line option "-o mlfqs". */
-extern bool thread_mlfqs;
+bool thread_mlfqs;
 
 void thread_init(void);
 void thread_start(void);
