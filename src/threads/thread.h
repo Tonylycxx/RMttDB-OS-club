@@ -101,6 +101,9 @@ struct thread
    struct thread *parent_thread; /*  */
    struct list child_list;
 
+   struct list openend_files;
+   int cur_fd;
+
 #ifdef USERPROG
    /* Owned by userprog/process.c. */
    uint32_t *pagedir; /* Page directory. */
@@ -118,6 +121,12 @@ struct saved_child
    struct semaphore sema;
 };
 
+struct opened_file
+{
+   struct file *f;
+   int fd;
+   struct list_elem elem;
+}
 
 /* If false (default), use round-robin scheduler.
    If true, use multi-level feedback queue scheduler.
