@@ -134,9 +134,13 @@ int wait(struct intr_frame *f, tid_t tid)
 // }
 
 int
-open (const char *file)
+open (const char *file_name)
 {
-  struct file *f = filesys_open(file);
+  if(file_name == NULL)
+  {
+    return -1;
+  }
+  struct file *f = filesys_open(file_name);
   int fd;
   if(f == NULL)
   {
