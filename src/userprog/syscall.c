@@ -4,6 +4,9 @@
 #include "threads/interrupt.h"
 #include "threads/thread.h"
 #include "threads/vaddr.h"
+#include "filesys/filesys.h"
+#include "filesys/file.h"
+#include "threads/malloc.h"
 
 static void syscall_handler(struct intr_frame *);
 
@@ -61,9 +64,9 @@ syscall_handler(struct intr_frame *f)
     //   remove ((char *)(*getargu(f->esp, 0)));
     //   break;
 
-    // case SYS_OPEN:
-    //   open ((char *)(*getargu(f->esp, 0)));
-    //   break;
+  case SYS_OPEN:
+    f->eax = ((char *)(*getargu(f->esp, 0)));
+    break;
 
     // case SYS_FILESIZE:
     //   filesize ((int)(*getargu(f->esp, 0)));
@@ -128,11 +131,25 @@ int wait(struct intr_frame *f, tid_t tid)
 
 // }
 
-// int
-// open (const char *file)
-// {
-
-// }
+int
+open (const char *file_name)
+{
+  if(file_name == NULL)
+  {
+    return -1;
+  }
+  struct file *f = filesys_open(file_name);
+  int fd;
+  if(f == NULL)
+  {
+    return -1;
+  }
+  struct opened_file *op_file = malloc(sizeof(struct opened_file));
+  op_file->f = f;
+  fd = op_file->fd = thread_current()->cur_fd++;
+  list_push_back(&thread_current()->openend_files, &op_file->elem);
+  return fd;
+}
 
 // int
 // filesize (int fd)
