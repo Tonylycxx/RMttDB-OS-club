@@ -17,9 +17,10 @@ void syscall_init(void)
 
 void check_valid_addr(const void *ptr_to_check)
 {
-  if (!ptr_to_check)
+  struct thread * cur = thread_current();
+  if (!ptr_to_check || ptr_to_check <= 0x08048000 || !is_user_vaddr(ptr_to_check))
     exit(-1);
-  if (ptr_to_check < (void *)0x08048000 || (int)ptr_to_check > PHYS_BASE)
+  else if (pagedir_get_page (cur->pagedir, ptr_to_check) == NULL)
     exit(-1);
 }
 
@@ -33,6 +34,10 @@ static void
 syscall_handler(struct intr_frame *f)
 {
   check_valid_addr(f->esp);
+  check_valid_addr(f->esp + 1);
+  check_valid_addr(f->esp + 2);
+  check_valid_addr(f->esp + 3);
+
   int status = *(int *)f->esp;
 
   switch (status)
@@ -61,9 +66,9 @@ syscall_handler(struct intr_frame *f)
     //   remove ((char *)(*getargu(f->esp, 0)));
     //   break;
 
-    case SYS_OPEN:
-      f->eax = ((char *)(*getargu(f->esp, 0)));
-      break;
+  case SYS_OPEN:
+    f->eax = ((char *)(*getargu(f->esp, 0)));
+    break;
 
     // case SYS_FILESIZE:
     //   filesize ((int)(*getargu(f->esp, 0)));
