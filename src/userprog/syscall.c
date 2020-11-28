@@ -36,7 +36,7 @@ syscall_handler(struct intr_frame *f)
     //   break;
 
   case SYS_WAIT:
-    wait((tid_t)(*getargu(f->esp, 0)));
+    wait(f, (tid_t)(*getargu(f->esp, 0)));
     break;
 
     // case SYS_CREATE:
@@ -98,9 +98,9 @@ void exit(int status)
 
 // }
 
-int wait(tid_t tid)
+void wait(struct intr_frame *f, tid_t tid)
 {
-  
+  f->eax = process_wait(tid);
 }
 
 // bool
