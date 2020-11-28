@@ -49,6 +49,9 @@ tid_t process_execute(const char *file_name)
     palloc_free_page(_pcb.cmd_line);
     palloc_free_page(fn_copy);
   }
+
+  sema_down(&thread_current()->wait_child);
+
   return tid;
 }
 
@@ -110,6 +113,8 @@ start_process(void *pcb)
   if (!success)
     thread_exit();
 
+  sema_up(&thread_current()->parent_thread->wait_child);
+
   /* Start the user process by simulating a return from an
      interrupt, implemented by intr_exit (in
      threads/intr-stubs.S).  Because intr_exit takes all of its
@@ -143,6 +148,7 @@ int process_wait(tid_t child_tid)
       if(child->tid == child_tid)
       {
         sema_down(&child->sema);
+        list_remove(&child->elem);
         return child->ret_val;
       }
     }

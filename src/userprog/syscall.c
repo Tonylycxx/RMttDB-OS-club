@@ -31,9 +31,9 @@ syscall_handler(struct intr_frame *f)
     exit((int)(*getargu(f->esp, 0)));
     break;
 
-    // case SYS_EXEC:
-    //   exec ((char *)(*getargu(f->esp, 0)));
-    //   break;
+    case SYS_EXEC:
+      exec (f, (char *)(*getargu(f->esp, 0)));
+      break;
 
   case SYS_WAIT:
     wait(f, (tid_t)(*getargu(f->esp, 0)));
@@ -92,13 +92,13 @@ void exit(int status)
   thread_exit();
 }
 
-// tid_t
-// exec (const char *cmd_line)
-// {
+tid_t
+exec (struct intr_frame *f, const char *cmd_line)
+{
+  f->eax = process_execute(cmd_line);
+}
 
-// }
-
-void wait(struct intr_frame *f, tid_t tid)
+int wait(struct intr_frame *f, tid_t tid)
 {
   f->eax = process_wait(tid);
 }
