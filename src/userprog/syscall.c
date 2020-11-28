@@ -24,7 +24,7 @@ void check_valid_addr(const void *ptr_to_check)
 int *getargu(void *esp, int argument_index)
 {
   int *res = (int *)esp + argument_index + 1;
-  check_valid_addr(res);
+  check_valid_addr(res + 1);
   return res;
 }
 static void
@@ -32,8 +32,6 @@ syscall_handler(struct intr_frame *f)
 {
   check_valid_addr(f->esp);
   check_valid_addr(f->esp + 1);
-  check_valid_addr(f->esp + 2);
-  check_valid_addr(f->esp + 3);
 
   int status = *(int *)f->esp;
 
