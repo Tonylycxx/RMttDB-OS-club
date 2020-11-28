@@ -7,11 +7,6 @@
 
 static void syscall_handler(struct intr_frame *);
 
-int *getargu(void *esp, int argument_index)
-{
-  return (int *)esp + argument_index + 1;
-}
-
 void syscall_init(void)
 {
   intr_register_int(0x30, 3, INTR_ON, syscall_handler, "syscall");
@@ -21,10 +16,16 @@ void check_valid_addr(const void *ptr_to_check)
 {
   if (!ptr_to_check)
     exit(-1);
-  if ((int)ptr_to_check < (void *) 0x08048000 || (int)ptr_to_check > PHYS_BASE)
+  if (ptr_to_check < (void *)0x08048000 || (int)ptr_to_check > PHYS_BASE)
     exit(-1);
 }
 
+int *getargu(void *esp, int argument_index)
+{
+  int *res = (int *)esp + argument_index + 1;
+  check_valid_addr(res);
+  return res;
+}
 static void
 syscall_handler(struct intr_frame *f)
 {
@@ -86,7 +87,7 @@ syscall_handler(struct intr_frame *f)
     //   break;
 
   default:
-    thread_exit();
+    exit(-1);
     break;
   }
 }
