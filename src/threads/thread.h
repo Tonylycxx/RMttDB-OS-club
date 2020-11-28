@@ -98,7 +98,7 @@ struct thread
 
    int ret_val;                 /*  */
    // struct semaphore waitChild; /*  */
-   struct thread *parentThread; /*  */
+   struct thread *parent_thread; /*  */
    struct list child_list;
 
 #ifdef USERPROG

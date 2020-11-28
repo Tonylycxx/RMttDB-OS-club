@@ -182,13 +182,15 @@ thread_create (const char *name, int priority,
   /* Initialize thread. */
   init_thread (t, name, priority);
   tid = t->tid = allocate_tid ();
+  t->parent_thread = thread_current();
 
   /* */
   struct saved_child *child;
+  child = palloc_get_page(PAL_ZERO);
   child->tid = tid;
   child->ret_val = -1;
   sema_init(&child->sema, 0);
-  list_push_back(&t->parentThread->child_list, &child->elem);
+  list_push_back(&t->parent_thread->child_list, &child->elem);
 
   /* Stack frame for kernel_thread(). */
   kf = alloc_frame (t, sizeof *kf);
@@ -297,9 +299,9 @@ thread_exit (void)
      and schedule another process.  That process will destroy us
      when it calls thread_schedule_tail(). */
   intr_disable ();
-  // sema_up(&thread_current()->parentThread->waitChild);
+  // sema_up(&thread_current()->parent_thread->waitChild);
   struct list_elem *e;
-  for (e = list_begin (&thread_current()->parentThread->child_list); e != list_end (&thread_current()->parentThread->child_list);
+  for (e = list_begin (&thread_current()->parent_thread->child_list); e != list_end (&thread_current()->parent_thread->child_list);
        e = list_next (e))
     {
       struct saved_child *child = list_entry (e, struct saved_child, elem);
@@ -485,7 +487,8 @@ init_thread (struct thread *t, const char *name, int priority)
   t->blocked_ticks = 0;
   t->ret_val = -1;
   // sema_init(&t->waitChild, 0);
-  t->parentThread = thread_current();
+  t->parent_thread = NULL;
+  list_init(&t->child_list);
 
   t->magic = THREAD_MAGIC;
 
