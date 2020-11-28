@@ -3,6 +3,7 @@
 #include <syscall-nr.h>
 #include "threads/interrupt.h"
 #include "threads/thread.h"
+#include "threads/vaddr.h"
 
 static void syscall_handler(struct intr_frame *);
 
@@ -16,9 +17,18 @@ void syscall_init(void)
   intr_register_int(0x30, 3, INTR_ON, syscall_handler, "syscall");
 }
 
+void check_valid_addr(const void *ptr_to_check)
+{
+  if (!ptr_to_check)
+    exit(-1);
+  if ((int)ptr_to_check < (void *) 0x08048000 || (int)ptr_to_check > PHYS_BASE)
+    exit(-1);
+}
+
 static void
 syscall_handler(struct intr_frame *f)
 {
+  check_valid_addr(f->esp);
   int status = *(int *)f->esp;
 
   switch (status)
@@ -31,9 +41,9 @@ syscall_handler(struct intr_frame *f)
     exit((int)(*getargu(f->esp, 0)));
     break;
 
-    case SYS_EXEC:
-      exec (f, (char *)(*getargu(f->esp, 0)));
-      break;
+  case SYS_EXEC:
+    exec(f, (char *)(*getargu(f->esp, 0)));
+    break;
 
   case SYS_WAIT:
     wait(f, (tid_t)(*getargu(f->esp, 0)));
@@ -92,8 +102,7 @@ void exit(int status)
   thread_exit();
 }
 
-tid_t
-exec (struct intr_frame *f, const char *cmd_line)
+tid_t exec(struct intr_frame *f, const char *cmd_line)
 {
   f->eax = process_execute(cmd_line);
 }
