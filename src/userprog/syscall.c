@@ -17,18 +17,22 @@ void syscall_init(void)
 
 void check_valid_addr(const void *ptr_to_check)
 {
-  struct thread * cur = thread_current();
+  struct thread *cur = thread_current();
   if (!ptr_to_check || ptr_to_check <= 0x08048000 || !is_user_vaddr(ptr_to_check))
     exit(-1);
-  else if (pagedir_get_page (cur->pagedir, ptr_to_check) == NULL)
+  else if (pagedir_get_page(cur->pagedir, ptr_to_check) == NULL)
     exit(-1);
 }
 
-int *getargu(void *esp, int argument_index)
+void getargu(void *esp, int *arg, int argument_index)
 {
-  int *res = (int *)esp + argument_index + 1;
-  check_valid_addr(res + 1);
-  return res;
+  int i;
+  for (i = 0; i < argument_index; i++)
+  {
+    int *res = (int *)esp + i + 1;
+    check_valid_addr(res + 1);
+    arg[i] = *res;
+  }
 }
 static void
 syscall_handler(struct intr_frame *f)
@@ -37,6 +41,8 @@ syscall_handler(struct intr_frame *f)
   check_valid_addr(f->esp + 1);
 
   int status = *(int *)f->esp;
+  int arg[3];
+  void *phys_page_ptr = NULL;
 
   switch (status)
   {
@@ -45,15 +51,22 @@ syscall_handler(struct intr_frame *f)
     break;
 
   case SYS_EXIT:
-    exit((int)(*getargu(f->esp, 0)));
+    getargu(f->esp, &arg[0], 1);
+    exit(arg[0]);
     break;
 
   case SYS_EXEC:
-    exec(f, (char *)(*getargu(f->esp, 0)));
+    getargu(f->esp, &arg[0], 1);
+    phys_page_ptr = pagedir_get_page(thread_current()->pagedir, arg[0]);
+    if(!phys_page_ptr)
+      exit(-1);
+    arg[0] = phys_page_ptr;
+    exec(f, (char *)arg[0]);
     break;
 
   case SYS_WAIT:
-    wait(f, (tid_t)(*getargu(f->esp, 0)));
+    getargu(f->esp, &arg[0], 1);
+    wait(f, (tid_t)arg[0]);
     break;
 
     // case SYS_CREATE:
@@ -66,7 +79,12 @@ syscall_handler(struct intr_frame *f)
 
   case SYS_OPEN:
     //f->eax = ((char *)(*getargu(f->esp, 0)));
-    open(f, (char *)(*getargu(f->esp, 0)));
+    getargu(f->esp, &arg[0], 1);
+    phys_page_ptr = pagedir_get_page(thread_current()->pagedir, arg[0]);
+    if(!phys_page_ptr)
+      exit(-1);
+    arg[0] = phys_page_ptr;
+    open(f, (char *)arg[0]);
     break;
 
     // case SYS_FILESIZE:
@@ -78,7 +96,12 @@ syscall_handler(struct intr_frame *f)
     //   break;
 
   case SYS_WRITE:
-    write(f, (int)(*getargu(f->esp, 0)), (void *)(*getargu(f->esp, 1)), (unsigned)(*getargu(f->esp, 2)));
+    getargu(f->esp, &arg[0], 3);
+    phys_page_ptr = pagedir_get_page(thread_current()->pagedir, arg[1]);
+    if(!phys_page_ptr)
+      exit(-1);
+    arg[1] = phys_page_ptr;
+    write(f, (int)arg[0], (void *)arg[1], (unsigned)arg[2]);
     break;
 
     // case SYS_SEEK:
@@ -132,17 +155,20 @@ int wait(struct intr_frame *f, tid_t tid)
 
 // }
 
-int
-open (struct intr_frame *f, const char *file_name)
+int open(struct intr_frame *f, const char *file_name)
 {
-  if(file_name == NULL || !is_valid_addr(file_name))
+<<<<<<< HEAD
+  if(file_name == NULL)
+=======
+  if (file_name == NULL)
+>>>>>>> refs/remotes/origin/dev2
   {
     f->eax = -1;
     return -1;
   }
   struct file *file = filesys_open(file_name);
   int fd;
-  if(file == NULL)
+  if (file == NULL)
   {
     f->eax = -1;
     return -1;
@@ -155,10 +181,8 @@ open (struct intr_frame *f, const char *file_name)
   return fd;
 }
 
-int
-filesize (int fd)
+int filesize(int fd)
 {
-
 }
 
 // int
