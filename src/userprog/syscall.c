@@ -135,23 +135,24 @@ int wait(struct intr_frame *f, tid_t tid)
 int
 open (struct intr_frame *f, const char *file_name)
 {
-  if(file_name == NULL)
+  if(file_name == NULL || !is_valid_addr(file_name))
   {
     f->eax = -1;
-    exit(-1);
+    return -1;
   }
   struct file *file = filesys_open(file_name);
   int fd;
   if(file == NULL)
   {
     f->eax = -1;
-    exit(-1);
+    return -1;
   }
   struct opened_file *op_file = malloc(sizeof(struct opened_file));
   op_file->f = file;
   fd = op_file->fd = thread_current()->cur_fd++;
   list_push_back(&thread_current()->openend_files, &op_file->elem);
   f->eax = fd;
+  return fd;
 }
 
 int
