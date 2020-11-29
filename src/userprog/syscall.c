@@ -84,10 +84,13 @@ syscall_handler(struct intr_frame *f)
 
     case SYS_EXEC:
       getargu(f->esp, &arg[0], 1);
+      check_valid_addr(arg[0]);
       phys_page_ptr = pagedir_get_page(thread_current()->pagedir, arg[0]);
       if (!phys_page_ptr)
         exit(-1);
-      arg[0] = phys_page_ptr;
+      phys_page_ptr = pagedir_get_page(thread_current()->pagedir, arg[0] + 1);
+      if (!phys_page_ptr)
+        exit(-1);
       exec(f, (char *)arg[0]);
       break;
 
@@ -98,28 +101,28 @@ syscall_handler(struct intr_frame *f)
 
     case SYS_CREATE:
       getargu(f->esp, &arg[0], 2);
+      check_valid_addr(arg[0]);
       phys_page_ptr = pagedir_get_page(thread_current()->pagedir, arg[0]);
       if (!phys_page_ptr)
         exit(-1);
-      arg[0] = phys_page_ptr;
       create(f, (char *)arg[0], (unsigned)arg[1]);
       break;
 
     case SYS_REMOVE:
       getargu(f->esp, &arg[0], 1);
+      check_valid_addr(arg[0]);
       phys_page_ptr = pagedir_get_page(thread_current()->pagedir, arg[0]);
       if (!phys_page_ptr)
         exit(-1);
-      arg[0] = phys_page_ptr;
       remove (f, (char *)arg[0]);
       break;
 
     case SYS_OPEN:
       getargu(f->esp, &arg[0], 1);
+      check_valid_addr(arg[0]);
       phys_page_ptr = pagedir_get_page(thread_current()->pagedir, arg[0]);
       if (!phys_page_ptr)
         exit(-1);
-      arg[0] = phys_page_ptr;
       open(f, (char *)arg[0]);
       break;
 
@@ -130,37 +133,37 @@ syscall_handler(struct intr_frame *f)
 
     case SYS_READ:
       getargu(f->esp, &arg[0], 3);
+      check_valid_addr(arg[1]);
       phys_page_ptr = pagedir_get_page(thread_current()->pagedir, arg[1]);
       if (!phys_page_ptr)
         exit(-1);
-      arg[1] = phys_page_ptr;
       read(f, (int)arg[0], (void *)arg[1], (unsigned)arg[2]);
       break;
 
     case SYS_WRITE:
       getargu(f->esp, &arg[0], 3);
+      check_valid_addr(arg[1]);
       phys_page_ptr = pagedir_get_page(thread_current()->pagedir, arg[1]);
       if (!phys_page_ptr)
         exit(-1);
-      arg[1] = phys_page_ptr;
       write(f, (int)arg[0], (void *)arg[1], (unsigned)arg[2]);
       break;
 
     case SYS_SEEK:
       getargu(f->esp, &arg[0], 2);
+      check_valid_addr(arg[1]);
       phys_page_ptr = pagedir_get_page(thread_current()->pagedir, arg[1]);
       if (!phys_page_ptr)
         exit(-1);
-      arg[1] = phys_page_ptr;
       seek (f, (int)arg[0], (unsigned)arg[1]);
       break;
 
     case SYS_TELL:
       getargu(f->esp, &arg[0], 1);
+      check_valid_addr(arg[1]);
       phys_page_ptr = pagedir_get_page(thread_current()->pagedir, arg[1]);
       if (!phys_page_ptr)
         exit(-1);
-      arg[1] = phys_page_ptr;
       tell (f, (int)arg[0]);
       break;
 
