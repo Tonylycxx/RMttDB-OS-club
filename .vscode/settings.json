@@ -1,6 +1,10 @@
 {
 	"C_Cpp.errorSquiggles": "Enabled",
 	"files.associations": {
-		"*.inc": "c"
+		"*.inc": "c",
+		"atomic": "c",
+		"*.tcc": "c",
+		"fstream": "c",
+		"sstream": "c"
 	}
 }

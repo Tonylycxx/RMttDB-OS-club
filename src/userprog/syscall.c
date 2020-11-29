@@ -65,7 +65,8 @@ syscall_handler(struct intr_frame *f)
     //   break;
 
   case SYS_OPEN:
-    f->eax = ((char *)(*getargu(f->esp, 0)));
+    //f->eax = ((char *)(*getargu(f->esp, 0)));
+    open(f, (char *)(*getargu(f->esp, 0)));
     break;
 
     // case SYS_FILESIZE:
@@ -132,30 +133,32 @@ int wait(struct intr_frame *f, tid_t tid)
 // }
 
 int
-open (const char *file_name)
+open (struct intr_frame *f, const char *file_name)
 {
   if(file_name == NULL)
   {
-    return -1;
+    f->eax = -1;
+    exit(-1);
   }
-  struct file *f = filesys_open(file_name);
+  struct file *file = filesys_open(file_name);
   int fd;
-  if(f == NULL)
+  if(file == NULL)
   {
-    return -1;
+    f->eax = -1;
+    exit(-1);
   }
   struct opened_file *op_file = malloc(sizeof(struct opened_file));
-  op_file->f = f;
+  op_file->f = file;
   fd = op_file->fd = thread_current()->cur_fd++;
   list_push_back(&thread_current()->openend_files, &op_file->elem);
-  return fd;
+  f->eax = fd;
 }
 
-// int
-// filesize (int fd)
-// {
+int
+filesize (int fd)
+{
 
-// }
+}
 
 // int
 // read (int fd, void *buffer, unsigned size)
