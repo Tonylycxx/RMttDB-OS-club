@@ -101,7 +101,7 @@ struct thread
    struct thread *parent_thread; /*  */
    struct list child_list;
 
-   struct list openend_files;
+   struct list opened_files;
    int cur_fd;
 
 #ifdef USERPROG

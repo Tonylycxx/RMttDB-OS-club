@@ -112,9 +112,10 @@ syscall_handler(struct intr_frame *f)
       //   tell ((int)(*getargu(f->esp, 0)));
       //   break;
 
-      // case SYS_CLOSE:
-      //   close ((int)(*getargu(f->esp, 0)));
-      //   break;
+    case SYS_CLOSE:
+      getargu(f->esp, &arg[0], 1);
+      close(f, (int)arg[0]);
+      break;
 
     default:
       exit(-1);
@@ -172,14 +173,14 @@ int open(struct intr_frame *f, const char *file_name)
   struct opened_file *op_file = malloc(sizeof(struct opened_file));
   op_file->f = file;
   fd = op_file->fd = thread_current()->cur_fd++;
-  list_push_back(&thread_current()->openend_files, &op_file->elem);
+  list_push_back(&thread_current()->opened_files, &op_file->elem);
   f->eax = fd;
   return fd;
 }
 
-int filesize(int fd)
-{
-}
+// int filesize(int fd)
+// {
+// }
 
 // int
 // read (int fd, void *buffer, unsigned size)
@@ -208,8 +209,25 @@ int write(struct intr_frame *f, int fd, const void *buffer, unsigned size)
 
 // }
 
-// void
-// close (int fd)
-// {
-
-// }
+void
+close (struct intr_frame *f, int fd)
+{
+  if(fd == 0||fd == 1)
+  {
+    f->eax = -1;
+    return;
+  }
+  struct list_elem *e;
+  for (e = list_begin(&thread_current()->opened_files); e != list_end(&thread_current()->opened_files);
+       e = list_next(e))
+  {
+    struct opened_file *op_file = list_entry(e, struct opened_file, elem);
+    if(op_file->fd == fd)
+    {
+      list_remove(&op_file->elem);
+      file_close(op_file->f);
+      break;
+    }
+  }
+  f->eax = 0;
+}
