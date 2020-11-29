@@ -70,6 +70,7 @@ static void *alloc_frame(struct thread *, size_t size);
 static void schedule(void);
 void thread_schedule_tail(struct thread *prev);
 static tid_t allocate_tid(void);
+static struct lock filesys_lock;
 
 /* Initializes the threading system by transforming the code
    that's currently running into a thread.  This can't work in
@@ -91,6 +92,7 @@ void thread_init(void)
   lock_init(&tid_lock);
   list_init(&ready_list);
   list_init(&all_list);
+  lock_init(&filesys_lock);
 
   /* Set up a thread structure for the running thread. */
   initial_thread = running_thread();
@@ -602,6 +604,16 @@ void thread_blocked_check(struct thread *t, void *aux UNUSED)
   t->blocked_ticks--;
   if (t->blocked_ticks == 0)
     thread_unblock(t);
+}
+
+void acquire_file_lock()
+{
+  lock_acquire(&filesys_lock);
+}
+
+void release_file_lock()
+{
+  lock_release(&filesys_lock);
 }
 
 /* Offset of `stack' member within `struct thread'.
