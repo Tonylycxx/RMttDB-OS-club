@@ -42,6 +42,10 @@ tid_t process_execute(const char *file_name)
 
   /* Create a new thread to execute FILE_NAME. */
   _pcb.exec_name = strtok_r(fn_copy, " ", &save_ptr);
+  struct dir *root = dir_open_root();
+  struct inode *inode;
+  if(!dir_lookup(root, _pcb.exec_name, &inode))
+    return -1;
 
   tid = thread_create(_pcb.exec_name, PRI_DEFAULT, start_process, &_pcb);
   if (tid == TID_ERROR)
