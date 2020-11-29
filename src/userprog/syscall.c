@@ -46,79 +46,79 @@ syscall_handler(struct intr_frame *f)
 
   switch (status)
   {
-  case SYS_HALT:
-    halt();
-    break;
+    case SYS_HALT:
+      halt();
+      break;
 
-  case SYS_EXIT:
-    getargu(f->esp, &arg[0], 1);
-    exit(arg[0]);
-    break;
+    case SYS_EXIT:
+      getargu(f->esp, &arg[0], 1);
+      exit(arg[0]);
+      break;
 
-  case SYS_EXEC:
-    getargu(f->esp, &arg[0], 1);
-    phys_page_ptr = pagedir_get_page(thread_current()->pagedir, arg[0]);
-    if(!phys_page_ptr)
+    case SYS_EXEC:
+      getargu(f->esp, &arg[0], 1);
+      phys_page_ptr = pagedir_get_page(thread_current()->pagedir, arg[0]);
+      if (!phys_page_ptr)
+        exit(-1);
+      arg[0] = phys_page_ptr;
+      exec(f, (char *)arg[0]);
+      break;
+
+    case SYS_WAIT:
+      getargu(f->esp, &arg[0], 1);
+      wait(f, (tid_t)arg[0]);
+      break;
+
+      // case SYS_CREATE:
+      //   create ((char *)(*getargu(f->esp, 0)), (unsigned)(*getargu(f->esp, 1)));
+      //   break;
+
+      // case SYS_REMOVE:
+      //   remove ((char *)(*getargu(f->esp, 0)));
+      //   break;
+
+    case SYS_OPEN:
+      //f->eax = ((char *)(*getargu(f->esp, 0)));
+      getargu(f->esp, &arg[0], 1);
+      phys_page_ptr = pagedir_get_page(thread_current()->pagedir, arg[0]);
+      if (!phys_page_ptr)
+        exit(-1);
+      arg[0] = phys_page_ptr;
+      open(f, (char *)arg[0]);
+      break;
+
+      // case SYS_FILESIZE:
+      //   filesize ((int)(*getargu(f->esp, 0)));
+      //   break;
+
+      // case SYS_READ:
+      //   read ((int)(*getargu(f->esp, 0)), (void *)(*getargu(f->esp, 1)), (unsigned)(*getargu(f->esp, 2)));
+      //   break;
+
+    case SYS_WRITE:
+      getargu(f->esp, &arg[0], 3);
+      phys_page_ptr = pagedir_get_page(thread_current()->pagedir, arg[1]);
+      if (!phys_page_ptr)
+        exit(-1);
+      arg[1] = phys_page_ptr;
+      write(f, (int)arg[0], (void *)arg[1], (unsigned)arg[2]);
+      break;
+
+      // case SYS_SEEK:
+      //   seek ((int)(*getargu(f->esp, 0)), (unsigned)(*getargu(f->esp, 1)));
+      //   break;
+
+      // case SYS_TELL:
+      //   tell ((int)(*getargu(f->esp, 0)));
+      //   break;
+
+      // case SYS_CLOSE:
+      //   close ((int)(*getargu(f->esp, 0)));
+      //   break;
+
+    default:
       exit(-1);
-    arg[0] = phys_page_ptr;
-    exec(f, (char *)arg[0]);
-    break;
-
-  case SYS_WAIT:
-    getargu(f->esp, &arg[0], 1);
-    wait(f, (tid_t)arg[0]);
-    break;
-
-    // case SYS_CREATE:
-    //   create ((char *)(*getargu(f->esp, 0)), (unsigned)(*getargu(f->esp, 1)));
-    //   break;
-
-    // case SYS_REMOVE:
-    //   remove ((char *)(*getargu(f->esp, 0)));
-    //   break;
-
-  case SYS_OPEN:
-    //f->eax = ((char *)(*getargu(f->esp, 0)));
-    getargu(f->esp, &arg[0], 1);
-    phys_page_ptr = pagedir_get_page(thread_current()->pagedir, arg[0]);
-    if(!phys_page_ptr)
-      exit(-1);
-    arg[0] = phys_page_ptr;
-    open(f, (char *)arg[0]);
-    break;
-
-    // case SYS_FILESIZE:
-    //   filesize ((int)(*getargu(f->esp, 0)));
-    //   break;
-
-    // case SYS_READ:
-    //   read ((int)(*getargu(f->esp, 0)), (void *)(*getargu(f->esp, 1)), (unsigned)(*getargu(f->esp, 2)));
-    //   break;
-
-  case SYS_WRITE:
-    getargu(f->esp, &arg[0], 3);
-    phys_page_ptr = pagedir_get_page(thread_current()->pagedir, arg[1]);
-    if(!phys_page_ptr)
-      exit(-1);
-    arg[1] = phys_page_ptr;
-    write(f, (int)arg[0], (void *)arg[1], (unsigned)arg[2]);
-    break;
-
-    // case SYS_SEEK:
-    //   seek ((int)(*getargu(f->esp, 0)), (unsigned)(*getargu(f->esp, 1)));
-    //   break;
-
-    // case SYS_TELL:
-    //   tell ((int)(*getargu(f->esp, 0)));
-    //   break;
-
-    // case SYS_CLOSE:
-    //   close ((int)(*getargu(f->esp, 0)));
-    //   break;
-
-  default:
-    exit(-1);
-    break;
+      break;
   }
 }
 
@@ -157,11 +157,7 @@ int wait(struct intr_frame *f, tid_t tid)
 
 int open(struct intr_frame *f, const char *file_name)
 {
-<<<<<<< HEAD
-  if(file_name == NULL)
-=======
   if (file_name == NULL)
->>>>>>> refs/remotes/origin/dev2
   {
     f->eax = -1;
     return -1;
