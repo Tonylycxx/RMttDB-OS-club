@@ -69,9 +69,14 @@ syscall_handler(struct intr_frame *f)
       wait(f, (tid_t)arg[0]);
       break;
 
-      // case SYS_CREATE:
-      //   create ((char *)(*getargu(f->esp, 0)), (unsigned)(*getargu(f->esp, 1)));
-      //   break;
+    case SYS_CREATE:
+      getargu(f->esp, &arg[0], 2);
+      phys_page_ptr = pagedir_get_page(thread_current()->pagedir, arg[0]);
+      if (!phys_page_ptr)
+        exit(-1);
+      arg[0] = phys_page_ptr;
+      create(f, (char *)arg[0], (unsigned)arg[1]);
+      break;
 
       // case SYS_REMOVE:
       //   remove ((char *)(*getargu(f->esp, 0)));
@@ -87,13 +92,19 @@ syscall_handler(struct intr_frame *f)
       open(f, (char *)arg[0]);
       break;
 
-      // case SYS_FILESIZE:
-      //   filesize ((int)(*getargu(f->esp, 0)));
-      //   break;
+    case SYS_FILESIZE:
+      getargu(f->esp, &arg[0], 1);
+      filesize(f, (int)arg[0]);
+      break;
 
-      // case SYS_READ:
-      //   read ((int)(*getargu(f->esp, 0)), (void *)(*getargu(f->esp, 1)), (unsigned)(*getargu(f->esp, 2)));
-      //   break;
+    case SYS_READ:
+      getargu(f->esp, &arg[0], 3);
+      phys_page_ptr = pagedir_get_page(thread_current()->pagedir, arg[1]);
+      if (!phys_page_ptr)
+        exit(-1);
+      arg[1] = phys_page_ptr;
+      read(f, (int)arg[0], (void *)arg[1], (unsigned)arg[2]);
+      break;
 
     case SYS_WRITE:
       getargu(f->esp, &arg[0], 3);
@@ -144,11 +155,11 @@ int wait(struct intr_frame *f, tid_t tid)
   f->eax = process_wait(tid);
 }
 
-// bool
-// create (const char *file, unsigned initial_size)
-// {
-
-// }
+void
+create (struct intr_frame *f, const char *file, unsigned initial_size)
+{
+  f->eax = filesys_create(file, initial_size);
+}
 
 // bool
 // remove (const char *file)
@@ -178,23 +189,80 @@ int open(struct intr_frame *f, const char *file_name)
   return fd;
 }
 
-// int filesize(int fd)
-// {
-// }
+void filesize(struct intr_frame *f, int fd)
+{
+  if(fd == 0||fd == 1)
+  {
+    f->eax = -1;
+    return;
+  }
+  struct list_elem *e;
+  for (e = list_begin(&thread_current()->opened_files); e != list_end(&thread_current()->opened_files);
+       e = list_next(e))
+  {
+    struct opened_file *op_file = list_entry(e, struct opened_file, elem);
+    if(op_file->fd == fd)
+    {
+      f->eax = file_length(op_file->f);
+      return;
+    }
+  }
+  f->eax = -1;
+}
 
-// int
-// read (int fd, void *buffer, unsigned size)
-// {
+void
+read (struct intr_frame *f, int fd, void *buffer, unsigned size)
+{
+  if (fd == STDIN_FILENO)
+  {
+    f->eax = (int) input_getc();
+    return;
+  }
+  else if (fd == STDOUT_FILENO)
+  {
+    f->eax = 0;
+    return;
+  }
 
-// }
+  struct list_elem *e;
+  for (e = list_begin(&thread_current()->opened_files); e != list_end(&thread_current()->opened_files);
+       e = list_next(e))
+  {
+    struct opened_file *op_file = list_entry(e, struct opened_file, elem);
+    if(op_file->fd == fd)
+    {
+      f->eax = file_read(op_file->f, buffer, size);
+      return;
+    }
+  }
+  f->eax = 0;
+}
 
-int write(struct intr_frame *f, int fd, const void *buffer, unsigned size)
+void write(struct intr_frame *f, int fd, const void *buffer, unsigned size)
 {
   if (fd == STDOUT_FILENO)
   {
     putbuf((const char *)buffer, size);
     f->eax = size;
   }
+  else if (fd == STDIN_FILENO)
+  {
+    f->eax = 0;
+    return;
+  }
+
+  struct list_elem *e;
+  for (e = list_begin(&thread_current()->opened_files); e != list_end(&thread_current()->opened_files);
+       e = list_next(e))
+  {
+    struct opened_file *op_file = list_entry(e, struct opened_file, elem);
+    if(op_file->fd == fd)
+    {
+      f->eax = file_write(op_file->f, buffer, size);
+      return;
+    }
+  }
+  f->eax = 0;
 }
 
 // void
