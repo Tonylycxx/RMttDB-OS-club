@@ -45,7 +45,7 @@ void getargu(void *esp, int *arg, int argument_index)
   }
 }
 
-struct file *get_file(int fd)
+struct opened_file *get_op_file(int fd)
 {
   struct list_elem *e;
   for (e = list_begin(&thread_current()->opened_files); e != list_end(&thread_current()->opened_files);
@@ -54,7 +54,7 @@ struct file *get_file(int fd)
     struct opened_file *op_file = list_entry(e, struct opened_file, elem);
     if(op_file->fd == fd)
     {
-      return op_file->f;
+      return op_file;
     }
   }
 
@@ -246,9 +246,9 @@ filesize(struct intr_frame *f, int fd)
     f->eax = -1;
     return;
   }
-  struct file *file = get_file(fd);
-  if(file)
-    f->eax = file_length(file);
+  struct opened_file *op_file = get_op_file(fd);
+  if(op_file && op_file->f)
+    f->eax = file_length(op_file->f);
   else  
     f->eax = -1;
 }
@@ -267,9 +267,9 @@ read (struct intr_frame *f, int fd, void *buffer, unsigned size)
     return;
   }
 
-  struct file *file = get_file(fd);
-  if(file)
-    f->eax = file_read(file, buffer, size);
+  struct opened_file *op_file = get_op_file(fd);
+  if(op_file && op_file->f)
+    f->eax = file_read(op_file->f, buffer, size);
   else  
     f->eax = 0;
 
@@ -289,9 +289,9 @@ write(struct intr_frame *f, int fd, const void *buffer, unsigned size)
     return;
   }
 
-  struct file *file = get_file(fd);
-  if(file)
-    f->eax = file_write(file, buffer, size);
+  struct opened_file *op_file = get_op_file(fd);
+  if(op_file && op_file->f)
+    f->eax = file_write(op_file->f, buffer, size);
   else  
     f->eax = 0;
 
@@ -305,9 +305,9 @@ seek (struct intr_frame *f, int fd, unsigned position)
     return;
   }
 
-  struct file *file = get_file(fd);
-  if(file)
-    file_seek(file, position);
+  struct opened_file *op_file = get_op_file(fd);
+  if(op_file && op_file->f)
+    file_seek(op_file->f, position);
 }
 
 void
@@ -319,9 +319,9 @@ tell (struct intr_frame *f, int fd)
     return;
   }
 
-  struct file *file = get_file(fd);
-  if(file)
-    file_tell(file);
+  struct opened_file *op_file = get_op_file(fd);
+  if(op_file && op_file->f)
+    file_tell(op_file->f);
 
 }
 
@@ -333,18 +333,12 @@ close (struct intr_frame *f, int fd)
     f->eax = -1;
     return;
   }
-  
-  struct list_elem *e;
-  for (e = list_begin(&thread_current()->opened_files); e != list_end(&thread_current()->opened_files);
-       e = list_next(e))
+
+  struct opened_file *op_file = get_op_file(fd);
+  if(op_file && op_file->f)
   {
-    struct opened_file *op_file = list_entry(e, struct opened_file, elem);
-    if(op_file->fd == fd)
-    {
-      list_remove(&op_file->elem);
-      file_close(op_file->f);
-      break;
-    }
+    list_remove(&op_file->elem);
+    file_close(op_file->f);
   }
-  f->eax = 0;
+
 }
