@@ -10,6 +10,13 @@
 
 static void syscall_handler(struct intr_frame *);
 
+// struct file_sema
+// {
+//   struct inode *inode;
+//   struct semaphore sema;
+//   struct list_elem elem;
+// };
+
 void syscall_init(void)
 {
   intr_register_int(0x30, 3, INTR_ON, syscall_handler, "syscall");
@@ -105,6 +112,9 @@ syscall_handler(struct intr_frame *f)
     phys_page_ptr = pagedir_get_page(thread_current()->pagedir, arg[0]);
     if (!phys_page_ptr)
       exit(-1);
+    phys_page_ptr = pagedir_get_page(thread_current()->pagedir, arg[0] + 1);
+    if (!phys_page_ptr)
+      exit(-1);
     create(f, (char *)arg[0], (unsigned)arg[1]);
     break;
 
@@ -114,6 +124,9 @@ syscall_handler(struct intr_frame *f)
     phys_page_ptr = pagedir_get_page(thread_current()->pagedir, arg[0]);
     if (!phys_page_ptr)
       exit(-1);
+    phys_page_ptr = pagedir_get_page(thread_current()->pagedir, arg[0] + 1);
+    if (!phys_page_ptr)
+      exit(-1);
     remove(f, (char *)arg[0]);
     break;
 
@@ -121,6 +134,9 @@ syscall_handler(struct intr_frame *f)
     getargu(f->esp, &arg[0], 1);
     check_valid_addr(arg[0]);
     phys_page_ptr = pagedir_get_page(thread_current()->pagedir, arg[0]);
+    if (!phys_page_ptr)
+      exit(-1);
+    phys_page_ptr = pagedir_get_page(thread_current()->pagedir, arg[0] + 1);
     if (!phys_page_ptr)
       exit(-1);
     open(f, (char *)arg[0]);
@@ -137,6 +153,9 @@ syscall_handler(struct intr_frame *f)
     phys_page_ptr = pagedir_get_page(thread_current()->pagedir, arg[1]);
     if (!phys_page_ptr)
       exit(-1);
+    phys_page_ptr = pagedir_get_page(thread_current()->pagedir, arg[1] + 1);
+    if (!phys_page_ptr)
+      exit(-1);
     read(f, (int)arg[0], (void *)arg[1], (unsigned)arg[2]);
     break;
 
@@ -144,6 +163,9 @@ syscall_handler(struct intr_frame *f)
     getargu(f->esp, &arg[0], 3);
     check_valid_addr(arg[1]);
     phys_page_ptr = pagedir_get_page(thread_current()->pagedir, arg[1]);
+    if (!phys_page_ptr)
+      exit(-1);
+    phys_page_ptr = pagedir_get_page(thread_current()->pagedir, arg[1] + 1);
     if (!phys_page_ptr)
       exit(-1);
     write(f, (int)arg[0], (void *)arg[1], (unsigned)arg[2]);
@@ -155,6 +177,9 @@ syscall_handler(struct intr_frame *f)
     phys_page_ptr = pagedir_get_page(thread_current()->pagedir, arg[1]);
     if (!phys_page_ptr)
       exit(-1);
+    phys_page_ptr = pagedir_get_page(thread_current()->pagedir, arg[1] + 1);
+    if (!phys_page_ptr)
+      exit(-1);
     seek(f, (int)arg[0], (unsigned)arg[1]);
     break;
 
@@ -162,6 +187,9 @@ syscall_handler(struct intr_frame *f)
     getargu(f->esp, &arg[0], 1);
     check_valid_addr(arg[1]);
     phys_page_ptr = pagedir_get_page(thread_current()->pagedir, arg[1]);
+    if (!phys_page_ptr)
+      exit(-1);
+    phys_page_ptr = pagedir_get_page(thread_current()->pagedir, arg[1] + 1);
     if (!phys_page_ptr)
       exit(-1);
     tell(f, (int)arg[0]);
@@ -285,6 +313,7 @@ void write(struct intr_frame *f, int fd, const void *buffer, unsigned size)
   {
     putbuf((const char *)buffer, size);
     f->eax = size;
+    return;
   }
   else if (fd == STDIN_FILENO)
   {
