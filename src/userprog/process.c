@@ -44,7 +44,7 @@ tid_t process_execute(const char *file_name)
   _pcb.exec_name = strtok_r(fn_copy, " ", &save_ptr);
   struct dir *root = dir_open_root();
   struct inode *inode;
-  if(!dir_lookup(root, _pcb.exec_name, &inode))
+  if (!dir_lookup(root, _pcb.exec_name, &inode))
     return -1;
 
   tid = thread_create(_pcb.exec_name, PRI_DEFAULT, start_process, &_pcb);
@@ -53,8 +53,8 @@ tid_t process_execute(const char *file_name)
     palloc_free_page(_pcb.cmd_line);
     palloc_free_page(fn_copy);
   }
-
-  sema_down(&thread_current()->wait_child);
+  else
+    sema_down(&thread_current()->wait_child);
 
   return tid;
 }
@@ -146,17 +146,17 @@ start_process(void *pcb)
 int process_wait(tid_t child_tid)
 {
   struct list_elem *e;
-  for (e = list_begin (&thread_current()->child_list); e != list_end (&thread_current()->child_list);
-       e = list_next (e))
+  for (e = list_begin(&thread_current()->child_list); e != list_end(&thread_current()->child_list);
+       e = list_next(e))
+  {
+    struct saved_child *child = list_entry(e, struct saved_child, elem);
+    if (child->tid == child_tid)
     {
-      struct saved_child *child = list_entry (e, struct saved_child, elem);
-      if(child->tid == child_tid)
-      {
-        sema_down(&child->sema);
-        list_remove(&child->elem);
-        return child->ret_val;
-      }
+      sema_down(&child->sema);
+      list_remove(&child->elem);
+      return child->ret_val;
     }
+  }
   return -1;
 }
 
@@ -182,7 +182,7 @@ void process_exit(void)
     pagedir_activate(NULL);
     pagedir_destroy(pd);
 
-    if(thread_current()->this_file != NULL)
+    if (thread_current()->this_file != NULL)
     {
       file_allow_write(thread_current()->this_file);
       file_close(thread_current()->this_file);
@@ -295,6 +295,7 @@ bool load(const char *file_name, void (**eip)(void), void **esp)
   process_activate();
 
   /* Open executable file. */
+  acquire_file_lock();
   file = filesys_open(file_name);
   if (file == NULL)
   {
@@ -379,6 +380,7 @@ bool load(const char *file_name, void (**eip)(void), void **esp)
 done:
   /* We arrive here whether the load is successful or not. */
   file_close(file);
+  release_file_lock();
   return success;
 }
 
