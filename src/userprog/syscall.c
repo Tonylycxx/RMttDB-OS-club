@@ -76,7 +76,7 @@ syscall_handler(struct intr_frame *f)
 
   int status = *(int *)f->esp;
   int arg[3];
-  void *phys_page_ptr = NULL;
+  void *phys_page_ptr;
 
   switch (status)
   {
@@ -92,12 +92,7 @@ syscall_handler(struct intr_frame *f)
   case SYS_EXEC:
     getargu(f->esp, &arg[0], 1);
     check_valid_addr(arg[0]);
-    phys_page_ptr = pagedir_get_page(thread_current()->pagedir, arg[0]);
-    if (!phys_page_ptr)
-      exit(-1);
-    phys_page_ptr = pagedir_get_page(thread_current()->pagedir, arg[0] + 1);
-    if (!phys_page_ptr)
-      exit(-1);
+    check_valid_addr(arg[0] + 1);
     exec(f, (char *)arg[0]);
     break;
 
@@ -109,36 +104,21 @@ syscall_handler(struct intr_frame *f)
   case SYS_CREATE:
     getargu(f->esp, &arg[0], 2);
     check_valid_addr(arg[0]);
-    phys_page_ptr = pagedir_get_page(thread_current()->pagedir, arg[0]);
-    if (!phys_page_ptr)
-      exit(-1);
-    phys_page_ptr = pagedir_get_page(thread_current()->pagedir, arg[0] + 1);
-    if (!phys_page_ptr)
-      exit(-1);
+    check_valid_addr(arg[0] + 1);
     create(f, (char *)arg[0], (unsigned)arg[1]);
     break;
 
   case SYS_REMOVE:
     getargu(f->esp, &arg[0], 1);
     check_valid_addr(arg[0]);
-    phys_page_ptr = pagedir_get_page(thread_current()->pagedir, arg[0]);
-    if (!phys_page_ptr)
-      exit(-1);
-    phys_page_ptr = pagedir_get_page(thread_current()->pagedir, arg[0] + 1);
-    if (!phys_page_ptr)
-      exit(-1);
+    check_valid_addr(arg[0] + 1);
     remove(f, (char *)arg[0]);
     break;
 
   case SYS_OPEN:
     getargu(f->esp, &arg[0], 1);
     check_valid_addr(arg[0]);
-    phys_page_ptr = pagedir_get_page(thread_current()->pagedir, arg[0]);
-    if (!phys_page_ptr)
-      exit(-1);
-    phys_page_ptr = pagedir_get_page(thread_current()->pagedir, arg[0] + 1);
-    if (!phys_page_ptr)
-      exit(-1);
+    check_valid_addr(arg[0] + 1);
     open(f, (char *)arg[0]);
     break;
 
@@ -150,48 +130,28 @@ syscall_handler(struct intr_frame *f)
   case SYS_READ:
     getargu(f->esp, &arg[0], 3);
     check_valid_addr(arg[1]);
-    phys_page_ptr = pagedir_get_page(thread_current()->pagedir, arg[1]);
-    if (!phys_page_ptr)
-      exit(-1);
-    phys_page_ptr = pagedir_get_page(thread_current()->pagedir, arg[1] + 1);
-    if (!phys_page_ptr)
-      exit(-1);
-    read(f, (int)arg[0], (void *)arg[1], (unsigned)arg[2]);
+    check_valid_addr(arg[1] + 1);
+    read(f, (int)arg[0], (char *)arg[1], (unsigned)arg[2]);
     break;
 
   case SYS_WRITE:
     getargu(f->esp, &arg[0], 3);
     check_valid_addr(arg[1]);
-    phys_page_ptr = pagedir_get_page(thread_current()->pagedir, arg[1]);
-    if (!phys_page_ptr)
-      exit(-1);
-    phys_page_ptr = pagedir_get_page(thread_current()->pagedir, arg[1] + 1);
-    if (!phys_page_ptr)
-      exit(-1);
+    check_valid_addr(arg[1] + 1);
     write(f, (int)arg[0], (char *)arg[1], (unsigned)arg[2]);
     break;
 
   case SYS_SEEK:
     getargu(f->esp, &arg[0], 2);
     check_valid_addr(arg[1]);
-    phys_page_ptr = pagedir_get_page(thread_current()->pagedir, arg[1]);
-    if (!phys_page_ptr)
-      exit(-1);
-    phys_page_ptr = pagedir_get_page(thread_current()->pagedir, arg[1] + 1);
-    if (!phys_page_ptr)
-      exit(-1);
+    check_valid_addr(arg[1] + 1);
     seek(f, (int)arg[0], (unsigned)arg[1]);
     break;
 
   case SYS_TELL:
     getargu(f->esp, &arg[0], 1);
     check_valid_addr(arg[1]);
-    phys_page_ptr = pagedir_get_page(thread_current()->pagedir, arg[1]);
-    if (!phys_page_ptr)
-      exit(-1);
-    phys_page_ptr = pagedir_get_page(thread_current()->pagedir, arg[1] + 1);
-    if (!phys_page_ptr)
-      exit(-1);
+    check_valid_addr(arg[1] + 1);
     tell(f, (int)arg[0]);
     break;
 
@@ -282,13 +242,13 @@ void filesize(struct intr_frame *f, int fd)
     f->eax = -1;
 }
 
-void read(struct intr_frame *f, int fd, void *buffer, unsigned size)
+void read(struct intr_frame *f, int fd, char *buffer, unsigned size)
 {
   if (fd == STDIN_FILENO)
   {
     int i;
     for (i = 0; i < size; i++)
-      ((uint8_t *)buffer)[i] = input_getc();
+      buffer[i] = input_getc();
     f->eax = size;
     return size;
   }
@@ -361,12 +321,6 @@ void tell(struct intr_frame *f, int fd)
 
 void close(struct intr_frame *f, int fd)
 {
-  if (fd == STDIN_FILENO || fd == STDOUT_FILENO)
-  {
-    f->eax = -1;
-    return;
-  }
-
   struct opened_file *op_file = get_op_file(fd);
   if (op_file && op_file->f)
   {
