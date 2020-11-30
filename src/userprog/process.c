@@ -117,6 +117,8 @@ start_process(void *pcb)
   if (!success)
     thread_exit();
 
+  thread_current()->this_file = filesys_open(_pcb->exec_name);
+  file_deny_write(thread_current()->this_file);
   sema_up(&thread_current()->parent_thread->wait_child);
 
   /* Start the user process by simulating a return from an
@@ -180,6 +182,11 @@ void process_exit(void)
     pagedir_activate(NULL);
     pagedir_destroy(pd);
 
+    if(thread_current()->this_file != NULL)
+    {
+      file_allow_write(thread_current()->this_file);
+      file_close(thread_current()->this_file);
+    }
     printf("%s: exit(%d)\n", cur->name, cur->ret_val);
   }
 }

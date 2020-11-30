@@ -143,15 +143,11 @@ syscall_handler(struct intr_frame *f)
 
   case SYS_SEEK:
     getargu(f->esp, &arg[0], 2);
-    check_valid_addr(arg[1]);
-    check_valid_addr(arg[1] + 1);
     seek(f, (int)arg[0], (unsigned)arg[1]);
     break;
 
   case SYS_TELL:
     getargu(f->esp, &arg[0], 1);
-    check_valid_addr(arg[1]);
-    check_valid_addr(arg[1] + 1);
     tell(f, (int)arg[0]);
     break;
 
