@@ -168,7 +168,7 @@ syscall_handler(struct intr_frame *f)
     phys_page_ptr = pagedir_get_page(thread_current()->pagedir, arg[1] + 1);
     if (!phys_page_ptr)
       exit(-1);
-    write(f, (int)arg[0], (void *)arg[1], (unsigned)arg[2]);
+    write(f, (int)arg[0], (char *)arg[1], (unsigned)arg[2]);
     break;
 
   case SYS_SEEK:
@@ -262,14 +262,13 @@ void open(struct intr_frame *f, const char *file_name)
   fd = op_file->fd = thread_current()->cur_fd++;
   list_push_back(&thread_current()->opened_files, &op_file->elem);
   f->eax = fd;
-  return fd;
 }
 
 void filesize(struct intr_frame *f, int fd)
 {
   if (fd == STDIN_FILENO || fd == STDOUT_FILENO)
   {
-    f->eax = -1;
+    f->eax = 0;
     return;
   }
   struct opened_file *op_file = get_op_file(fd);
@@ -287,8 +286,11 @@ void read(struct intr_frame *f, int fd, void *buffer, unsigned size)
 {
   if (fd == STDIN_FILENO)
   {
-    f->eax = (int)input_getc();
-    return;
+    int i;
+    for (i = 0; i < size; i++)
+      ((uint8_t *)buffer)[i] = input_getc();
+    f->eax = size;
+    return size;
   }
   else if (fd == STDOUT_FILENO)
   {
@@ -307,17 +309,12 @@ void read(struct intr_frame *f, int fd, void *buffer, unsigned size)
     f->eax = -1;
 }
 
-void write(struct intr_frame *f, int fd, const void *buffer, unsigned size)
+void write(struct intr_frame *f, int fd, const char *buffer, unsigned size)
 {
   if (fd == STDOUT_FILENO)
   {
     putbuf((const char *)buffer, size);
     f->eax = size;
-    return;
-  }
-  else if (fd == STDIN_FILENO)
-  {
-    f->eax = 0;
     return;
   }
 
@@ -334,11 +331,6 @@ void write(struct intr_frame *f, int fd, const void *buffer, unsigned size)
 
 void seek(struct intr_frame *f, int fd, unsigned position)
 {
-  if (fd == STDIN_FILENO || fd == STDOUT_FILENO)
-  {
-    return;
-  }
-
   struct opened_file *op_file = get_op_file(fd);
   if (op_file && op_file->f)
   {
@@ -360,9 +352,11 @@ void tell(struct intr_frame *f, int fd)
   if (op_file && op_file->f)
   {
     acquire_file_lock();
-    file_tell(op_file->f);
+    f->eax = file_tell(op_file->f);
     release_file_lock();
   }
+  else
+    f->eax = -1;
 }
 
 void close(struct intr_frame *f, int fd)
@@ -380,5 +374,6 @@ void close(struct intr_frame *f, int fd)
     file_close(op_file->f);
     release_file_lock();
     list_remove(&op_file->elem);
+    free(op_file);
   }
 }

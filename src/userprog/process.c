@@ -143,7 +143,6 @@ start_process(void *pcb)
    does nothing. */
 int process_wait(tid_t child_tid)
 {
-  // sema_down(&thread_current()->waitChild);
   struct list_elem *e;
   for (e = list_begin (&thread_current()->child_list); e != list_end (&thread_current()->child_list);
        e = list_next (e))
