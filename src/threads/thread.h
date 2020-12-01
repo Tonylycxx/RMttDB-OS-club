@@ -104,6 +104,7 @@ struct thread
    struct list opened_files;
    int cur_fd;
    struct file *this_file;
+   bool success;
 
 #ifdef USERPROG
    /* Owned by userprog/process.c. */

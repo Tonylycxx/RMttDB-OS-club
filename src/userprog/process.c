@@ -45,17 +45,26 @@ tid_t process_execute(const char *file_name)
   struct dir *root = dir_open_root();
   struct inode *inode;
   if (!dir_lookup(root, _pcb.exec_name, &inode))
-    return TID_ERROR;
-
-  tid = thread_create(_pcb.exec_name, PRI_DEFAULT, start_process, &_pcb);
-  if (tid == TID_ERROR)
   {
     palloc_free_page(_pcb.cmd_line);
     palloc_free_page(fn_copy);
+    return TID_ERROR;
   }
-  else
-    sema_down(&thread_current()->wait_child);
 
+  tid = thread_create(_pcb.exec_name, PRI_DEFAULT, start_process, &_pcb);
+  if (tid != TID_ERROR)
+  {
+    sema_down(&thread_current()->wait_child);
+    if (!thread_current()->success)
+    {
+      palloc_free_page(_pcb.cmd_line);
+      palloc_free_page(fn_copy);
+      return TID_ERROR;
+    }
+  }
+
+  palloc_free_page(_pcb.cmd_line);
+  palloc_free_page(fn_copy);
   return tid;
 }
 
@@ -79,6 +88,7 @@ start_process(void *pcb)
 
   if (!success)
   {
+    thread_current()->parent_thread->success = false;
     sema_up(&thread_current()->parent_thread->wait_child);
     thread_exit();
   }
@@ -121,6 +131,7 @@ start_process(void *pcb)
   /* If load failed, quit. */
   // palloc_free_page(file_name);
 
+  thread_current()->parent_thread->success = true;
   thread_current()->this_file = filesys_open(_pcb->exec_name);
   file_deny_write(thread_current()->this_file);
   sema_up(&thread_current()->parent_thread->wait_child);
