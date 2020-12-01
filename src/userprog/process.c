@@ -45,7 +45,7 @@ tid_t process_execute(const char *file_name)
   struct dir *root = dir_open_root();
   struct inode *inode;
   if (!dir_lookup(root, _pcb.exec_name, &inode))
-    return -1;
+    return TID_ERROR;
 
   tid = thread_create(_pcb.exec_name, PRI_DEFAULT, start_process, &_pcb);
   if (tid == TID_ERROR)
