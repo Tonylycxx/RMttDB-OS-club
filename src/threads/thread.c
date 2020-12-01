@@ -292,18 +292,38 @@ void thread_exit(void)
      and schedule another process.  That process will destroy us
      when it calls thread_schedule_tail(). */
   intr_disable();
-  // sema_up(&thread_current()->parent_thread->waitChild);
+
   struct list_elem *e;
+  struct saved_child *child;
   for (e = list_begin(&thread_current()->parent_thread->child_list); e != list_end(&thread_current()->parent_thread->child_list);
        e = list_next(e))
   {
-    struct saved_child *child = list_entry(e, struct saved_child, elem);
+    child = list_entry(e, struct saved_child, elem);
     if (child->tid == thread_current()->tid)
     {
       child->ret_val = thread_current()->ret_val;
       sema_up(&child->sema);
+      break;
     }
   }
+
+  while (!list_empty(&thread_current()->opened_files))
+  {
+    e = list_pop_front(&thread_current()->opened_files);
+    struct opened_file *f = list_entry(e, struct opened_file, elem);
+    acquire_file_lock();
+    file_close(f->f);
+    release_file_lock();
+    free(f);
+  }
+
+  while (!list_empty(&thread_current()->child_list))
+  {
+    e = list_pop_front(&thread_current()->child_list);
+    struct saved_child *child = list_entry(e, struct saved_child, elem);
+    free(child);
+  }
+  
 
   list_remove(&thread_current()->allelem);
   thread_current()->status = THREAD_DYING;
@@ -480,6 +500,7 @@ init_thread(struct thread *t, const char *name, int priority)
   list_init(&t->child_list);
   list_init(&t->opened_files);
   t->cur_fd = 2;
+  t->this_file = NULL;
 
   t->magic = THREAD_MAGIC;
 
