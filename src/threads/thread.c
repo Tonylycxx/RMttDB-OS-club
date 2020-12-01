@@ -183,7 +183,7 @@ tid_t thread_create(const char *name, int priority,
 
   /* */
   struct saved_child *child;
-  child = palloc_get_page(PAL_ZERO);
+  child = malloc(sizeof(struct saved_child));
   child->tid = tid;
   child->ret_val = -1;
   sema_init(&child->sema, 0);

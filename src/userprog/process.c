@@ -77,6 +77,12 @@ start_process(void *pcb)
 
   success = load(_pcb->exec_name, &if_.eip, &if_.esp);
 
+  if (!success)
+  {
+    sema_up(&thread_current()->parent_thread->wait_child);
+    thread_exit();
+  }
+
   char *token;
   char *esp = (char *)if_.esp;
   char *argv[128];
@@ -114,8 +120,6 @@ start_process(void *pcb)
 
   /* If load failed, quit. */
   // palloc_free_page(file_name);
-  if (!success)
-    thread_exit();
 
   thread_current()->this_file = filesys_open(_pcb->exec_name);
   file_deny_write(thread_current()->this_file);
