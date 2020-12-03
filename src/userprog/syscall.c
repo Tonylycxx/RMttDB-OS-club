@@ -93,8 +93,6 @@ syscall_handler(struct intr_frame *f)
   case SYS_EXEC:
     getargu(f->esp, &arg[0], 1);
     check_valid_argu(arg[0]);
-    // check_valid_addr(arg[0]);
-    // check_valid_addr(arg[0] + 1);
     exec(f, (char *)arg[0]);
     break;
 
@@ -105,22 +103,19 @@ syscall_handler(struct intr_frame *f)
 
   case SYS_CREATE:
     getargu(f->esp, &arg[0], 2);
-    check_valid_addr(arg[0]);
-    check_valid_addr(arg[0] + 1);
+    check_valid_argu(arg[0]);
     create(f, (char *)arg[0], (unsigned)arg[1]);
     break;
 
   case SYS_REMOVE:
     getargu(f->esp, &arg[0], 1);
-    check_valid_addr(arg[0]);
-    check_valid_addr(arg[0] + 1);
+    check_valid_argu(arg[0]);
     remove(f, (char *)arg[0]);
     break;
 
   case SYS_OPEN:
     getargu(f->esp, &arg[0], 1);
-    check_valid_addr(arg[0]);
-    check_valid_addr(arg[0] + 1);
+    check_valid_argu(arg[0]);
     open(f, (char *)arg[0]);
     break;
 
@@ -131,15 +126,13 @@ syscall_handler(struct intr_frame *f)
 
   case SYS_READ:
     getargu(f->esp, &arg[0], 3);
-    check_valid_addr(arg[1]);
-    check_valid_addr(arg[1] + 1);
+    check_valid_argu(arg[1]);
     read(f, (int)arg[0], (char *)arg[1], (unsigned)arg[2]);
     break;
 
   case SYS_WRITE:
     getargu(f->esp, &arg[0], 3);
-    check_valid_addr(arg[1]);
-    check_valid_addr(arg[1] + 1);
+    check_valid_argu(arg[1]);
     write(f, (int)arg[0], (char *)arg[1], (unsigned)arg[2]);
     break;
 
