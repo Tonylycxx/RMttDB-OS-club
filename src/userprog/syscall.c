@@ -31,14 +31,15 @@ void check_valid_addr(const void *ptr_to_check)
     exit(-1);
 }
 
-bool is_valid_addr(const void *ptr_to_check)
+void check_valid_argu(char *ptr_to_check) 
 {
-  struct thread *cur = thread_current();
-  if (!ptr_to_check || ptr_to_check <= 0x08048000 || !is_user_vaddr(ptr_to_check))
-    return 0;
-  else if (pagedir_get_page(cur->pagedir, ptr_to_check) == NULL)
-    return 0;
-  return 1;
+  for(;;)
+  {
+    check_valid_addr(ptr_to_check);
+    if(*ptr_to_check == '\0')
+      return;
+    ptr_to_check++;
+  }
 }
 
 void getargu(void *esp, int *arg, int argument_index)
@@ -91,8 +92,9 @@ syscall_handler(struct intr_frame *f)
 
   case SYS_EXEC:
     getargu(f->esp, &arg[0], 1);
-    check_valid_addr(arg[0]);
-    check_valid_addr(arg[0] + 1);
+    check_valid_argu(arg[0]);
+    // check_valid_addr(arg[0]);
+    // check_valid_addr(arg[0] + 1);
     exec(f, (char *)arg[0]);
     break;
 
