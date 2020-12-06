@@ -37,6 +37,9 @@ static struct thread *initial_thread;
 /* Lock used by allocate_tid(). */
 static struct lock tid_lock;
 
+/* Lock used by file system. */
+static struct lock filesys_lock;
+
 /* Stack frame for kernel_thread(). */
 struct kernel_thread_frame
 {
@@ -70,7 +73,6 @@ static void *alloc_frame(struct thread *, size_t size);
 static void schedule(void);
 void thread_schedule_tail(struct thread *prev);
 static tid_t allocate_tid(void);
-static struct lock filesys_lock;
 
 /* Initializes the threading system by transforming the code
    that's currently running into a thread.  This can't work in
@@ -90,9 +92,9 @@ void thread_init(void)
   ASSERT(intr_get_level() == INTR_OFF);
 
   lock_init(&tid_lock);
+  lock_init(&filesys_lock);
   list_init(&ready_list);
   list_init(&all_list);
-  lock_init(&filesys_lock);
 
   /* Set up a thread structure for the running thread. */
   initial_thread = running_thread();
@@ -278,6 +280,55 @@ tid_t thread_tid(void)
   return thread_current()->tid;
 }
 
+/* Traverse father thread's list child_list and sema_up current thread's 
+   struct's semaphore in order to allow father thread to wait current
+   thread after current thread exit. */
+void save_wait_info(void)
+{
+  struct list_elem *e;
+  struct saved_child *child;
+  for (e = list_begin(&thread_current()->parent_thread->child_list); e != list_end(&thread_current()->parent_thread->child_list);
+       e = list_next(e))
+  {
+    child = list_entry(e, struct saved_child, elem);
+    if (child->tid == thread_current()->tid)
+    {
+      child->ret_val = thread_current()->ret_val;
+      sema_up(&child->sema);
+      return;
+    }
+  }
+}
+
+/* Free current thread's child_list. */
+void free_children(void)
+{
+  struct list_elem *e;
+  struct saved_child *child;
+  while (!list_empty(&thread_current()->child_list))
+  {
+    e = list_pop_front(&thread_current()->child_list);
+    child = list_entry(e, struct saved_child, elem);
+    free(child);
+  }
+}
+
+/* Free current thread's opened_files list. */
+void free_opened_files(void)
+{
+  struct list_elem *e;
+  struct opened_file *f;
+  while (!list_empty(&thread_current()->opened_files))
+  {
+    e = list_pop_front(&thread_current()->opened_files);
+    f = list_entry(e, struct opened_file, elem);
+    acquire_file_lock();
+    file_close(f->f);
+    release_file_lock();
+    free(f);
+  }
+}
+
 /* Deschedules the current thread and destroys it.  Never
    returns to the caller. */
 void thread_exit(void)
@@ -295,35 +346,15 @@ void thread_exit(void)
 
   struct list_elem *e;
   struct saved_child *child;
-  for (e = list_begin(&thread_current()->parent_thread->child_list); e != list_end(&thread_current()->parent_thread->child_list);
-       e = list_next(e))
-  {
-    child = list_entry(e, struct saved_child, elem);
-    if (child->tid == thread_current()->tid)
-    {
-      child->ret_val = thread_current()->ret_val;
-      sema_up(&child->sema);
-      break;
-    }
-  }
 
-  while (!list_empty(&thread_current()->opened_files))
-  {
-    e = list_pop_front(&thread_current()->opened_files);
-    struct opened_file *f = list_entry(e, struct opened_file, elem);
-    acquire_file_lock();
-    file_close(f->f);
-    release_file_lock();
-    free(f);
-  }
+  /* Save ret_val and sema_up current thread's semaphore in order to
+     make sure that father thread's can get necessary information in
+     syscall wait(). */
+  save_wait_info();
 
-  while (!list_empty(&thread_current()->child_list))
-  {
-    e = list_pop_front(&thread_current()->child_list);
-    struct saved_child *child = list_entry(e, struct saved_child, elem);
-    free(child);
-  }
-  
+  /* Free all the resources. */
+  free_children();
+  free_opened_files();
 
   list_remove(&thread_current()->allelem);
   thread_current()->status = THREAD_DYING;
@@ -497,10 +528,10 @@ init_thread(struct thread *t, const char *name, int priority)
   t->ret_val = -1;
   sema_init(&t->wait_child, 0);
   t->parent_thread = NULL;
-  list_init(&t->child_list);
-  list_init(&t->opened_files);
   t->cur_fd = 2;
   t->this_file = NULL;
+  list_init(&t->child_list);
+  list_init(&t->opened_files);
 
   t->magic = THREAD_MAGIC;
 

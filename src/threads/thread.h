@@ -92,19 +92,19 @@ struct thread
    struct list_elem allelem;  /* List element for all threads list. */
 
    /* Shared between thread.c and synch.c. */
-   struct list_elem elem; /* List element. */
+   struct list_elem elem;     /* List element. */
 
-   int64_t blocked_ticks;
+   int64_t blocked_ticks;     /* Number of ticks thread has blocked */
 
-   int ret_val;                 /*  */
-   struct semaphore wait_child; /*  */
-   struct thread *parent_thread; /*  */
-   struct list child_list;
+   int ret_val;                     /* Thread's return value, used in syscall exit() */
+   struct semaphore wait_child;     /* A semaphore used to synchronize with parent thread, in order to transmit information during creating a new thread */
+   struct thread *parent_thread;    /* Pointer points to parent thread, used to synchronize with parent thread */
+   struct list child_list;          /* A list includes all the child threads */
 
-   struct list opened_files;
-   int cur_fd;
-   struct file *this_file;
-   bool success;
+   struct list opened_files;        /* A list includes all thread's opened filed */
+   int cur_fd;                      /* Next fd allocate to next open file */
+   struct file *this_file;          /* Pointer points to the executable file current process running */
+   bool success;                    /* A boolean variable used to make sure whether a child process is successfully loaded */
 
 #ifdef USERPROG
    /* Owned by userprog/process.c. */
@@ -115,19 +115,21 @@ struct thread
    unsigned magic; /* Detects stack overflow. */
 };
 
+/* Struct to save child processes infomation */
 struct saved_child
 {
-   tid_t tid;
-   int ret_val;
-   struct list_elem elem;
-   struct semaphore sema;
+   tid_t tid;                 /* This thread's tid */
+   int ret_val;               /* This thread's return value used in syscall exit() */
+   struct list_elem elem;     /* List elem to make a list */
+   struct semaphore sema;     /* Semaphore used in syscall wait() to wait a certain child process(thread) */
 };
 
+/* Struct to save a thread's opened files */
 struct opened_file
 {
-   struct file *f;
-   int fd;
-   struct list_elem elem;
+   struct file *f;            /* Pointer points to a file */
+   int fd;                    /* This file's fd (might be different according to process) */
+   struct list_elem elem;     /* List elem to make a list */
 };
 
 /* If false (default), use round-robin scheduler.
@@ -167,5 +169,9 @@ int thread_get_recent_cpu(void);
 int thread_get_load_avg(void);
 
 void thread_blocked_check(struct thread *t, void *aux UNUSED);
+
+void save_wait_info(void);
+void free_children(void);
+void free_opened_files(void);
 
 #endif /* threads/thread.h */
