@@ -104,7 +104,7 @@ struct thread
    struct list opened_files;        /* A list includes all thread's opened filed */
    int cur_fd;                      /* Next fd allocate to next open file */
    struct file *this_file;          /* Pointer points to the executable file current process running */
-   bool success;                    /* A boolean variable used to make sure whether a child process is successfully loaded */
+   bool load_result;                /* A boolean variable used to make sure whether a child process is successfully loaded */
 
 #ifdef USERPROG
    /* Owned by userprog/process.c. */
@@ -169,6 +169,9 @@ int thread_get_recent_cpu(void);
 int thread_get_load_avg(void);
 
 void thread_blocked_check(struct thread *t, void *aux UNUSED);
+
+void acquire_file_lock(void);
+void release_file_lock(void);
 
 void save_wait_info(void);
 void free_children(void);

@@ -7,45 +7,63 @@
 #include "filesys/filesys.h"
 #include "filesys/file.h"
 #include "threads/malloc.h"
+#include "userprog/process.h"
+#include "userprog/pagedir.h"
+#include "devices/input.h"
+#include "devices/shutdown.h"
 
 static void syscall_handler(struct intr_frame *);
 
-// struct file_sema
-// {
-//   struct inode *inode;
-//   struct semaphore sema;
-//   struct list_elem elem;
-// };
+static void halt(void);
+static void exit(int);
+static void exec(struct intr_frame *f, const char *cmd_line);
+static void wait(struct intr_frame *f, tid_t tid);
+static void create(struct intr_frame *f, const char *file, unsigned initial_size);
+static void remove(struct intr_frame *f, const char *file);
+static void open(struct intr_frame *f, const char *file_name);
+static void filesize(struct intr_frame *f, int fd);
+static void read(struct intr_frame *f, int fd, char *buffer, unsigned size);
+static void write(struct intr_frame *f, int fd, const char *buffer, unsigned size);
+static void seek(int fd, unsigned position);
+static void tell(struct intr_frame *f, int fd);
+static void close(int);
 
+/* Initate system call system, bound system call to interrupt 0.30 */
 void syscall_init(void)
 {
   intr_register_int(0x30, 3, INTR_ON, syscall_handler, "syscall");
 }
 
+/* Check pointer's validation
+   Firstly check whether it points to user zone
+   Secondly check whether pages it points to is valid. */
 void check_valid_addr(const void *ptr_to_check)
 {
   struct thread *cur = thread_current();
-  if (!ptr_to_check || ptr_to_check <= 0x08048000 || !is_user_vaddr(ptr_to_check))
+  if (!ptr_to_check || (void *)ptr_to_check <= 0x08048000 || !is_user_vaddr(ptr_to_check))
     exit(-1);
   else if (pagedir_get_page(cur->pagedir, ptr_to_check) == NULL)
     exit(-1);
 }
 
-void check_valid_argu(char *ptr_to_check) 
+/* When a argument points to a string, use this function
+   to check each char in order to garuntee the safty. */
+void check_valid_argu(char *ptr_to_check)
 {
-  for(;;)
+  for (;;)
   {
     check_valid_addr(ptr_to_check);
-    if(*ptr_to_check == '\0')
+    if (*ptr_to_check == '\0')
       return;
     ptr_to_check++;
   }
 }
 
-void getargu(void *esp, int *arg, int argument_index)
+/* Get first 'argument_number' arguments and save in array arg. */
+void getargu(void *esp, int *arg, int argument_number)
 {
   int i;
-  for (i = 0; i < argument_index; i++)
+  for (i = 0; i < argument_number; i++)
   {
     int *res = (int *)esp + i + 1;
     check_valid_addr(res + 1);
@@ -53,6 +71,7 @@ void getargu(void *esp, int *arg, int argument_index)
   }
 }
 
+/* Find certain file opened by current thread and return a struct. */
 struct opened_file *get_op_file(int fd)
 {
   struct list_elem *e;
@@ -65,10 +84,11 @@ struct opened_file *get_op_file(int fd)
       return op_file;
     }
   }
-
   return NULL;
 }
 
+/* Syscall handler, which call corresponding function to handle
+   different system calls. */
 static void
 syscall_handler(struct intr_frame *f)
 {
@@ -77,7 +97,6 @@ syscall_handler(struct intr_frame *f)
 
   int status = *(int *)f->esp;
   int arg[3];
-  void *phys_page_ptr;
 
   switch (status)
   {
@@ -92,7 +111,7 @@ syscall_handler(struct intr_frame *f)
 
   case SYS_EXEC:
     getargu(f->esp, &arg[0], 1);
-    check_valid_argu(arg[0]);
+    check_valid_argu((char *)arg[0]);
     exec(f, (char *)arg[0]);
     break;
 
@@ -103,19 +122,19 @@ syscall_handler(struct intr_frame *f)
 
   case SYS_CREATE:
     getargu(f->esp, &arg[0], 2);
-    check_valid_argu(arg[0]);
+    check_valid_argu((char *)arg[0]);
     create(f, (char *)arg[0], (unsigned)arg[1]);
     break;
 
   case SYS_REMOVE:
     getargu(f->esp, &arg[0], 1);
-    check_valid_argu(arg[0]);
+    check_valid_argu((char *)arg[0]);
     remove(f, (char *)arg[0]);
     break;
 
   case SYS_OPEN:
     getargu(f->esp, &arg[0], 1);
-    check_valid_argu(arg[0]);
+    check_valid_argu((char *)arg[0]);
     open(f, (char *)arg[0]);
     break;
 
@@ -126,19 +145,19 @@ syscall_handler(struct intr_frame *f)
 
   case SYS_READ:
     getargu(f->esp, &arg[0], 3);
-    check_valid_argu(arg[1]);
+    check_valid_argu((char *)arg[1]);
     read(f, (int)arg[0], (char *)arg[1], (unsigned)arg[2]);
     break;
 
   case SYS_WRITE:
     getargu(f->esp, &arg[0], 3);
-    check_valid_argu(arg[1]);
+    check_valid_argu((char *)arg[1]);
     write(f, (int)arg[0], (char *)arg[1], (unsigned)arg[2]);
     break;
 
   case SYS_SEEK:
     getargu(f->esp, &arg[0], 2);
-    seek(f, (int)arg[0], (unsigned)arg[1]);
+    seek((int)arg[0], (unsigned)arg[1]);
     break;
 
   case SYS_TELL:
@@ -148,7 +167,7 @@ syscall_handler(struct intr_frame *f)
 
   case SYS_CLOSE:
     getargu(f->esp, &arg[0], 1);
-    close(f, (int)arg[0]);
+    close((int)arg[0]);
     break;
 
   default:
@@ -157,27 +176,34 @@ syscall_handler(struct intr_frame *f)
   }
 }
 
+/* Some system calls downwards needed file system lock. */
+
+/* System handler function for halt() */
 void halt(void)
 {
   shutdown_power_off();
 }
 
+/* System handler function for exit() */
 void exit(int status)
 {
   thread_current()->ret_val = status;
   thread_exit();
 }
 
+/* System handler function for exec() */
 void exec(struct intr_frame *f, const char *cmd_line)
 {
   f->eax = process_execute(cmd_line);
 }
 
+/* System handler function for wait() */
 void wait(struct intr_frame *f, tid_t tid)
 {
   f->eax = process_wait(tid);
 }
 
+/* System handler function for create() */
 void create(struct intr_frame *f, const char *file, unsigned initial_size)
 {
   acquire_file_lock();
@@ -185,6 +211,7 @@ void create(struct intr_frame *f, const char *file, unsigned initial_size)
   release_file_lock();
 }
 
+/* System handler function for remove() */
 void remove(struct intr_frame *f, const char *file)
 {
   acquire_file_lock();
@@ -192,12 +219,13 @@ void remove(struct intr_frame *f, const char *file)
   release_file_lock();
 }
 
+/* System handler function for open() */
 void open(struct intr_frame *f, const char *file_name)
 {
   if (file_name == NULL)
   {
     f->eax = -1;
-    return -1;
+    return;
   }
   acquire_file_lock();
   struct file *file = filesys_open(file_name);
@@ -206,7 +234,7 @@ void open(struct intr_frame *f, const char *file_name)
   if (file == NULL)
   {
     f->eax = -1;
-    return -1;
+    return;
   }
   struct opened_file *op_file = malloc(sizeof(struct opened_file));
   op_file->f = file;
@@ -215,6 +243,7 @@ void open(struct intr_frame *f, const char *file_name)
   f->eax = fd;
 }
 
+/* System handler function for filesize() */
 void filesize(struct intr_frame *f, int fd)
 {
   if (fd == STDIN_FILENO || fd == STDOUT_FILENO)
@@ -233,22 +262,22 @@ void filesize(struct intr_frame *f, int fd)
     f->eax = -1;
 }
 
+/* System handler function for read() */
 void read(struct intr_frame *f, int fd, char *buffer, unsigned size)
 {
   if (fd == STDIN_FILENO)
   {
-    int i;
+    unsigned i;
     for (i = 0; i < size; i++)
       buffer[i] = input_getc();
     f->eax = size;
-    return size;
+    return;
   }
   else if (fd == STDOUT_FILENO)
   {
     f->eax = 0;
     return;
   }
-
   struct opened_file *op_file = get_op_file(fd);
   if (op_file && op_file->f)
   {
@@ -260,6 +289,7 @@ void read(struct intr_frame *f, int fd, char *buffer, unsigned size)
     f->eax = -1;
 }
 
+/* System handler function for write() */
 void write(struct intr_frame *f, int fd, const char *buffer, unsigned size)
 {
   if (fd == STDOUT_FILENO)
@@ -268,7 +298,6 @@ void write(struct intr_frame *f, int fd, const char *buffer, unsigned size)
     f->eax = size;
     return;
   }
-
   struct opened_file *op_file = get_op_file(fd);
   if (op_file && op_file->f)
   {
@@ -280,7 +309,8 @@ void write(struct intr_frame *f, int fd, const char *buffer, unsigned size)
     f->eax = 0;
 }
 
-void seek(struct intr_frame *f, int fd, unsigned position)
+/* System handler function for seek() */
+void seek(int fd, unsigned position)
 {
   struct opened_file *op_file = get_op_file(fd);
   if (op_file && op_file->f)
@@ -291,6 +321,7 @@ void seek(struct intr_frame *f, int fd, unsigned position)
   }
 }
 
+/* System handler function for tell() */
 void tell(struct intr_frame *f, int fd)
 {
   if (fd == STDIN_FILENO || fd == STDOUT_FILENO)
@@ -298,7 +329,6 @@ void tell(struct intr_frame *f, int fd)
     f->eax = -1;
     return;
   }
-
   struct opened_file *op_file = get_op_file(fd);
   if (op_file && op_file->f)
   {
@@ -310,7 +340,8 @@ void tell(struct intr_frame *f, int fd)
     f->eax = -1;
 }
 
-void close(struct intr_frame *f, int fd)
+/* System handler function for close() */
+void close(int fd)
 {
   struct opened_file *op_file = get_op_file(fd);
   if (op_file && op_file->f)

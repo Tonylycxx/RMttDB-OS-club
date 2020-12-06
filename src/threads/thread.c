@@ -3,6 +3,7 @@
 #include <stddef.h>
 #include <random.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #include "threads/flags.h"
 #include "threads/interrupt.h"
@@ -185,7 +186,7 @@ tid_t thread_create(const char *name, int priority,
 
   /* */
   struct saved_child *child;
-  child = malloc(sizeof(struct saved_child));
+  child = (struct saved_child*) malloc(sizeof(struct saved_child));
   child->tid = tid;
   child->ret_val = -1;
   sema_init(&child->sema, 0);

@@ -35,27 +35,30 @@ tid_t process_execute(const char *file_name)
      Otherwise there's a race between the caller and load(). */
   fn_copy = palloc_get_page(0);
   _pcb.cmd_line = palloc_get_page(0);
-  if (fn_copy == NULL || _pcb.cmd_line == NULL)
+  if (fn_copy == NULL || _pcb.cmd_line == NULL)     // If palloc failed, return an error tid.
     return TID_ERROR;
   strlcpy(fn_copy, file_name, PGSIZE);
   strlcpy(_pcb.cmd_line, file_name, PGSIZE);
 
   /* Create a new thread to execute FILE_NAME. */
-  _pcb.exec_name = strtok_r(fn_copy, " ", &save_ptr);
-  struct dir *root = dir_open_root();
+  _pcb.exec_name = strtok_r(fn_copy, " ", &save_ptr);   // Get executable file's name.
+  struct dir *root = dir_open_root();               // Search file in root directory
   struct inode *inode;
-  if (!dir_lookup(root, _pcb.exec_name, &inode))
+  if (!dir_lookup(root, _pcb.exec_name, &inode))    // If cannot find it, return an error tid.
   {
+    /* Free resources. */
     palloc_free_page(_pcb.cmd_line);
     palloc_free_page(fn_copy);
     return TID_ERROR;
   }
 
-  tid = thread_create(_pcb.exec_name, PRI_DEFAULT, start_process, &_pcb);
+  tid = thread_create(_pcb.exec_name, PRI_DEFAULT, start_process, &_pcb);   // Try to create a new process.
+  
+  /* If create failed, free allocated resources and return an error tid. */
   if (tid != TID_ERROR)
   {
     sema_down(&thread_current()->wait_child);
-    if (!thread_current()->success)
+    if (!thread_current()->load_result)
     {
       palloc_free_page(_pcb.cmd_line);
       palloc_free_page(fn_copy);
@@ -63,6 +66,7 @@ tid_t process_execute(const char *file_name)
     }
   }
 
+  /* Free allocated resources then return new process's tid. */
   palloc_free_page(_pcb.cmd_line);
   palloc_free_page(fn_copy);
   return tid;
@@ -86,9 +90,11 @@ start_process(void *pcb)
 
   success = load(_pcb->exec_name, &if_.eip, &if_.esp);
 
+  /* If load failed, set father process's load_result to false
+     and up semaphore then exit. */
   if (!success)
   {
-    thread_current()->parent_thread->success = false;
+    thread_current()->parent_thread->load_result = false;
     sema_up(&thread_current()->parent_thread->wait_child);
     thread_exit();
   }
@@ -97,6 +103,8 @@ start_process(void *pcb)
   char *esp = (char *)if_.esp;
   char *argv[128];
   int argc = 0;
+
+  /* Process command line arguments. */
   for (token = strtok_r(_pcb->cmd_line, " ", &save_ptr); token != NULL; token = strtok_r(NULL, " ", &save_ptr))
   {
     esp = esp - (strlen(token) + 1);
@@ -104,35 +112,37 @@ start_process(void *pcb)
     argv[argc++] = esp;
   }
 
-  //word align
+  /* Word align */
   size_t size = (unsigned int)esp % 4 + 4;
   esp -= size;
   memset(esp, 0, size);
 
-  //save pointer
+  /* Save pointer */
   for (int i = argc - 1; i >= 0; i--)
   {
     esp -= 4;
     *(int *)esp = argv[i];
   }
 
-  //save argv and argc
+  /* Save argv and argc */
   esp -= 4;
   *(int *)esp = esp + 4;
   esp -= 4;
   *(int *)esp = argc;
 
-  //save return address
+  /* Save return address */
   esp -= 4;
   memset(esp, 0, 4);
 
   if_.esp = (void *)esp;
 
-  /* If load failed, quit. */
-  // palloc_free_page(file_name);
-
-  thread_current()->parent_thread->success = true;
+  /* Load successfully, set father process's load_result to true
+     Open executable file then deny its write authority then up
+     semaphore. */
+  thread_current()->parent_thread->load_result = true;
+  acquire_file_lock();
   thread_current()->this_file = filesys_open(_pcb->exec_name);
+  release_file_lock();
   file_deny_write(thread_current()->this_file);
   sema_up(&thread_current()->parent_thread->wait_child);
 
