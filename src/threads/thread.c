@@ -345,9 +345,6 @@ void thread_exit(void)
      when it calls thread_schedule_tail(). */
   intr_disable();
 
-  struct list_elem *e;
-  struct saved_child *child;
-
   /* Save ret_val and sema_up current thread's semaphore in order to
      make sure that father thread's can get necessary information in
      syscall wait(). */
