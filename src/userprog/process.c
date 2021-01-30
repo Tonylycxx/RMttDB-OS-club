@@ -35,16 +35,16 @@ tid_t process_execute(const char *file_name)
      Otherwise there's a race between the caller and load(). */
   fn_copy = palloc_get_page(0);
   _pcb.cmd_line = palloc_get_page(0);
-  if (fn_copy == NULL || _pcb.cmd_line == NULL)     // If palloc failed, return an error tid.
+  if (fn_copy == NULL || _pcb.cmd_line == NULL) // If palloc failed, return an error tid.
     return TID_ERROR;
   strlcpy(fn_copy, file_name, PGSIZE);
   strlcpy(_pcb.cmd_line, file_name, PGSIZE);
 
   /* Create a new thread to execute FILE_NAME. */
-  _pcb.exec_name = strtok_r(fn_copy, " ", &save_ptr);   // Get executable file's name.
-  struct dir *root = dir_open_root();               // Search file in root directory
+  _pcb.exec_name = strtok_r(fn_copy, " ", &save_ptr); // Get executable file's name.
+  struct dir *root = dir_open_root();                 // Search file in root directory
   struct inode *inode;
-  if (!dir_lookup(root, _pcb.exec_name, &inode))    // If cannot find it, return an error tid.
+  if (!dir_lookup(root, _pcb.exec_name, &inode)) // If cannot find it, return an error tid.
   {
     /* Free resources. */
     palloc_free_page(_pcb.cmd_line);
@@ -52,8 +52,8 @@ tid_t process_execute(const char *file_name)
     return TID_ERROR;
   }
 
-  tid = thread_create(_pcb.exec_name, PRI_DEFAULT, start_process, &_pcb);   // Try to create a new process.
-  
+  tid = thread_create(_pcb.exec_name, PRI_DEFAULT, start_process, &_pcb); // Try to create a new process.
+
   /* If create failed, free allocated resources and return an error tid. */
   if (tid != TID_ERROR)
   {
