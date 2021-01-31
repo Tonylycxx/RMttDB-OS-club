@@ -1,3 +1,6 @@
+#ifndef VM_FRAME_H
+#define VM_FRAME_H
+
 #include <stdbool.h>
 #include <list.h>
 #include <hash.h>
@@ -21,6 +24,8 @@ void init_frame_table(void);
 bool evict_frame(void);
 struct frame* frame_alloc(struct page *page);
 bool evict_frame(void);
+
+#endif
 
 
 
