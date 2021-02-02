@@ -2,7 +2,14 @@
 #define VM_PAGE_H
 
 #include <stdbool.h>
+#include <stdlib.h>
+#include <stdio.h>
 #include <hash.h>
+#include <list.h>
+#include <block.h>
+#include <inode.h>
+#include <page.h>
+#include "vm/frame.h"
 
 #define PAGE_TYPE_ZERO 0x01
 #define PAGE_FILE_KERNEL 0x02
@@ -29,7 +36,7 @@ struct page
   void *upage;
   uint32_t *pd;
   uint8_t page_type;
-  bool read_only;
+  uint8_t writable;
   bool accessed_or_not;
   bool dirty_or_not;
   bool swapped_or_not;

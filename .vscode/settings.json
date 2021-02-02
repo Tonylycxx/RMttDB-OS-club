@@ -5,6 +5,19 @@
 		"atomic": "c",
 		"*.tcc": "c",
 		"fstream": "c",
-		"sstream": "c"
+		"sstream": "c",
+		"array": "c",
+		"deque": "c",
+		"string": "c",
+		"vector": "c",
+		"algorithm": "c",
+		"memory_resource": "c",
+		"string_view": "c",
+		"memory": "c",
+		"initializer_list": "c",
+		"stdexcept": "c",
+		"tuple": "c",
+		"type_traits": "c",
+		"utility": "c"
 	}
 }

@@ -5,6 +5,7 @@
 #include "threads/init.h"
 #include "threads/pte.h"
 #include "threads/palloc.h"
+#include "threads/vaddr.h"
 
 static uint32_t *active_pd(void);
 static void invalidate_pagedir(uint32_t *);
@@ -256,4 +257,48 @@ invalidate_pagedir(uint32_t *pd)
          "Translation Lookaside Buffers (TLBs)". */
     pagedir_activate(pd);
   }
+}
+
+bool pagedir_set_pageinfo(uint32_t *pd, const void *upage, struct page *page)
+{
+  ASSERT(pg_ofs(upage) == 0);
+  ASSERT(is_user_vaddr(upage));
+  ASSERT(pd != init_page_dir);
+
+  uint32_t *pte = lookup_page(pd, upage, true);
+  if (pte != NULL)
+  {
+    struct page **pie = ((struct page **)pg_next_page(pte)) + pt_no(upage);
+    *pie = page;
+    return true;
+  }
+  else
+    return false;
+}
+
+struct page *pagedir_get_pageinfo(uint32_t *pd, const void *upage)
+{
+  ASSERT(pg_ofs(upage) == 0);
+  ASSERT(is_user_vaddr(upage));
+  ASSERT(pd != init_page_dir);
+
+  struct page *pte = lookup_page(pd, upage, false);
+  if (pte != NULL)
+  {
+    struct page **pie = ((struct page **)pg_next_page(pte)) + pg_ofs(upage);
+    return *pie;
+  }
+  else
+    return NULL;
+}
+
+void pagedir_unload_page(uint32_t *pd, const void *upage)
+{
+  ASSERT(pg_ofs(upage) == 0);
+  ASSERT(is_user_vaddr(upage));
+  ASSERT(pd != init_page_dir);
+
+  struct page *p = pagedir_get_page(pd, upage);
+  if(p != NULL)
+    ft_unload_frame(pd, upage);
 }
