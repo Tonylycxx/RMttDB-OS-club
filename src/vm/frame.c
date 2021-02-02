@@ -1,5 +1,6 @@
 #include <stdlib.h>
 #include <stdio.h>
+#include <string.h>
 #include <list.h>
 #include <block.h>
 #include <inode.h>
@@ -23,6 +24,9 @@ static void release_fm_lock(void);
 static struct frame *frame_alloc(void);
 static struct frame *evict_frame(void);
 static void *get_frame_to_evict(void);
+static bool load_frame(uint32_t *pd, const void *upage, bool write, bool keep_locked);
+static void map_page(struct page *page, struct frame *frame, const void *upage);
+static struct frame *lookup_read_only_frame(struct page *page);
 
 static inline off_t get_offset(off_t file_end_offset);
 static inline off_t get_size(off_t file_end_offset);
@@ -128,7 +132,7 @@ static void *get_frame_to_evict(void)
       PANIC("No available frame to evict");
     found = frame;
     clock_hand = list_next(clock_hand);
-    if(clock_hand == list_end(&frame_table))
+    if (clock_hand == list_end(&frame_table))
       clock_hand = list_begin(&frame_table);
   }
   return found;
@@ -194,4 +198,118 @@ static struct frame *evict_frame(void)
   }
   memset(frame->kpage, 0, PGSIZE);
   return frame;
+}
+
+static bool load_frame(uint32_t *pd, const void *upage, bool write, bool keep_locked)
+{
+  struct page *page;
+  struct file_info *file_info;
+  struct frame *frame = NULL;
+  void *kpage;
+  off_t bytes_read;
+  bool success = false;
+
+  ASSERT(is_user_vaddr(upage));
+  page = pagedir_get_pageinfo(pd, upage);
+  if (page == NULL || (write & page->writable == 0))
+    return success;
+  lock_acquire(&ft_lock);
+  wait_for_io_done(&page->fm);
+  ASSERT(page->fm == NULL || keep_locked);
+  if (page->fm != NULL)
+  {
+    page->fm->fm_lock++;
+    lock_release(&ft_lock);
+    return true;
+  }
+
+  if (page->page_type & PAGE_TYPE_FILE && page->writable == 0)
+  {
+    frame = lookup_read_only_frame(page);
+    if (frame != NULL)
+    {
+      map_page(page, frame, upage);
+      frame->fm_lock++;
+      wait_for_io_done(&frame);
+      frame->fm_lock--;
+      success = true;
+    }
+  }
+
+  if (frame == NULL)
+  {
+    frame = frame_alloc();
+    if (frame != NULL)
+    {
+      map_page(page, frame, upage);
+      if (page->swapped_or_not || page->page_type & PAGE_TYPE_FILE)
+      {
+        frame->io = true;
+        frame->fm_lock++;
+        if (page->swapped_or_not)
+        {
+          lock_release(&ft_lock);
+          swap_read(page->data.swap_sector, frame->kpage);
+          page->swapped_or_not = false;
+        }
+        else
+        {
+          if (page->writable == 0)
+          {
+            hash_insert(&read_only_frames, &frame->ft_hash_elem);
+          }
+          file_info = &page->data.file_info;
+          lock_release(&ft_lock);
+          bytes_read = file_read_at(file_info->file, frame->kpage, 
+                                    size(file_info->file_end_offset), 
+                                    offset(file_info->file_end_offset);
+          ASSERT(bytes_read == size(file_info->file_end_offset));
+        }
+        lock_acquire(&ft_lock);
+        frame->fm_lock--;
+        frame->io = false;
+        cond_broadcast(&frame->io_done, &ft_lock);
+      }
+      else if (page->page_type & PAGE_FILE_KERNEL)
+      {
+        kpage = (void *)page->data.kpage;
+        ASSERT(kpage != NULL);
+        memcpy(frame->kpage, kpage, PGSIZE);
+        palloc_free_page(kpage);
+        page->data.kpage = NULL;
+        page->page_type = PAGE_TYPE_ZERO;
+      }
+      success = true;
+    }
+  }
+  if (success && keep_locked)
+    frame->fm_lock++;
+  lock_release(&ft_lock);
+  return success;
+}
+
+static void wait_for_io_done(struct frame **frame)
+{
+  while (*frame != NULL && (*frame)->io)
+    cond_wait(&(*frame)->io_done, &ft_lock);
+}
+
+static void map_page(struct page *page, struct frame *frame, const void *upage)
+{
+  page->fm = frame;
+  list_push_back(&frame->pages, &page->elem);
+  pagedir_set_page(page->pd, upage, frame->kpage, page->writable != 0);
+  pagedir_set_dirty(page->pd, upage, false);
+  pagedir_set_accessed(page->pd, upage, true);
+}
+
+static struct frame *lookup_read_only_frame(struct page *page)
+{
+  struct frame frame;
+  struct hash_elem *e;
+
+  list_init(&frame.pages);
+  list_push_back(&frame.pages, &page->elem);
+  e = hash_find(&read_only_frames, &frame.ft_hash_elem);
+  return e != NULL ? hash_entry(e, struct frame, ft_hash_elem) : NULL;
 }
