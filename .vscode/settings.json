@@ -18,6 +18,8 @@
 		"stdexcept": "c",
 		"tuple": "c",
 		"type_traits": "c",
-		"utility": "c"
+		"utility": "c",
+		"syscall.h": "c",
+		"vaddr.h": "c"
 	}
 }

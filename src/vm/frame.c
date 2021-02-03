@@ -2,14 +2,13 @@
 #include <stdio.h>
 #include <string.h>
 #include <list.h>
-#include <block.h>
-#include <inode.h>
-#include <pagedir.h>
-#include <page.h>
-#include <file.h>
-#include <palloc.h>
 #include <debug.h>
+#include "devices/block.h"
 #include "threads/vaddr.h"
+#include "threads/palloc.h"
+#include "filesys/inode.h"
+#include "filesys/file.h"
+#include "userprog/pagedir.h"
 #include "vm/frame.h"
 #include "vm/page.h"
 #include "vm/swap.h"
@@ -27,6 +26,7 @@ static void *get_frame_to_evict(void);
 static bool load_frame(uint32_t *pd, const void *upage, bool write, bool keep_locked);
 static void map_page(struct page *page, struct frame *frame, const void *upage);
 static struct frame *lookup_read_only_frame(struct page *page);
+static void wait_for_io_done(struct frame **frame);
 
 static inline off_t get_offset(off_t file_end_offset);
 static inline off_t get_size(off_t file_end_offset);
@@ -103,7 +103,7 @@ static void *get_frame_to_evict(void)
   bool accessed;
 
   ASSERT(!list_empty(&frame_table));
-  start = list_entry(clock_hand, strct frame, list_elem);
+  start = list_entry(clock_hand, struct frame, ft_elem);
   frame = start;
   do
   {
@@ -166,9 +166,9 @@ static struct frame *evict_frame(void)
       file_info = &page->data.file_info;
       lock_release(&ft_lock);
       bytes_written = file_write_at(file_info->file, frame->kpage,
-                                    size(file_info->file_end_offset),
-                                    offset(file_info->file_end_offset));
-      ASSERT(bytes_written == size(file_info->file_end_offset));
+                                    get_size(file_info->file_end_offset),
+                                    get_offset(file_info->file_end_offset));
+      ASSERT(bytes_written == get_size(file_info->file_end_offset));
     }
     else
     {
@@ -260,10 +260,10 @@ static bool load_frame(uint32_t *pd, const void *upage, bool write, bool keep_lo
           }
           file_info = &page->data.file_info;
           lock_release(&ft_lock);
-          bytes_read = file_read_at(file_info->file, frame->kpage, 
-                                    size(file_info->file_end_offset), 
-                                    offset(file_info->file_end_offset);
-          ASSERT(bytes_read == size(file_info->file_end_offset));
+          bytes_read = file_read_at(file_info->file, frame->kpage,
+                                    get_size(file_info->file_end_offset),
+                                    get_offset(file_info->file_end_offset));
+          ASSERT(bytes_read == get_size(file_info->file_end_offset));
         }
         lock_acquire(&ft_lock);
         frame->fm_lock--;
@@ -312,4 +312,92 @@ static struct frame *lookup_read_only_frame(struct page *page)
   list_push_back(&frame.pages, &page->elem);
   e = hash_find(&read_only_frames, &frame.ft_hash_elem);
   return e != NULL ? hash_entry(e, struct frame, ft_hash_elem) : NULL;
+}
+
+bool ft_load_frame(uint32_t *pd, const void *upage, bool write)
+{
+  return load_frame(pd, upage, write, false);
+}
+
+void ft_unload_frame(uint32_t *pd, const void *upage)
+{
+  struct page *page, *p;
+  struct file_info *file_info;
+  void *kpage;
+  struct frame *frame;
+  off_t bytes_written;
+  struct list_elem *e;
+
+  ASSERT(is_user_vaddr(upage));
+  page = pagedir_get_pageinfo(pd, upage);
+  if (page == NULL)
+    return;
+  lock_acquire(&ft_lock);
+  wait_for_io_done(&page->fm);
+  if (page->fm != NULL)
+  {
+    frame = page->fm;
+    page->fm = NULL;
+    if (list_size(&frame->pages) > 1)
+    {
+      for (e = list_begin(&frame->pages); e != list_end(&frame->pages); e = list_next(e))
+      {
+        p = list_entry(e, struct page, elem);
+        if (page == p)
+        {
+          list_remove(e);
+          break;
+        }
+      }
+    }
+    else
+    {
+      ASSERT(list_entry(list_begin(&frame->pages), struct page, elem) == page);
+      if (page->page_type & PAGE_TYPE_FILE && page->writable == 0)
+        hash_delete(&read_only_frames, &frame->ft_hash_elem);
+      if (clock_hand == &frame->ft_elem)
+      {
+        clock_hand = list_next(clock_hand);
+        if (clock_hand == list_end(&frame_table))
+          clock_hand = list_begin(&frame_table);
+      }
+      list_remove(&page->elem);
+      list_remove(&frame->ft_elem);
+    }
+    pagedir_clear_page(page->pd, upage);
+    lock_release(&ft_lock);
+    if (list_empty(&frame->pages))
+    {
+      if (page->writable & WRITABLE_TO_FILE && pagedir_is_dirty(page->pd, upage))
+      {
+        ASSERT(page->writable != 0);
+        file_info = &page->data.file_info;
+        bytes_written = file_write_at(file_info->file, frame->kpage,
+                                      get_size(file_info->file_end_offset),
+                                      get_offset(file_info->file_end_offset));
+        ASSERT(bytes_written == get_size(file_info->file_end_offset));
+      }
+      palloc_free_page(frame->kpage);
+      ASSERT(frame->fm_lock = 0);
+      free(frame);
+    }
+  }
+  else
+  {
+    lock_release(&ft_lock);
+  }
+  if (page->swapped_or_not)
+  {
+    swap_release(page->data.swap_sector);
+    page->swapped_or_not = false;
+  }
+  else if (page->page_type & PAGE_FILE_KERNEL)
+  {
+    kpage = (void *)page->data.kpage;
+    ASSERT(kpage != NULL);
+    palloc_free_page(kpage);
+    page->data.kpage = NULL;
+  }
+  pagedir_set_pageinfo(page->pd, upage, NULL);
+  free(page);
 }

@@ -6,6 +6,8 @@
 #include "threads/pte.h"
 #include "threads/palloc.h"
 #include "threads/vaddr.h"
+#include "vm/frame.h"
+#include "vm/page.h"
 
 static uint32_t *active_pd(void);
 static void invalidate_pagedir(uint32_t *);
@@ -299,6 +301,6 @@ void pagedir_unload_page(uint32_t *pd, const void *upage)
   ASSERT(pd != init_page_dir);
 
   struct page *p = pagedir_get_page(pd, upage);
-  if(p != NULL)
+  if (p != NULL)
     ft_unload_frame(pd, upage);
 }

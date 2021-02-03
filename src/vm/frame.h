@@ -5,14 +5,12 @@
 #include <list.h>
 #include <hash.h>
 #include "threads/synch.h"
-#include "vm/page.h"
 
 struct frame
 {
   void *kpage;
   bool io;
   unsigned short fm_lock;
-
 
   struct condition io_done;
   struct list_elem ft_elem;
