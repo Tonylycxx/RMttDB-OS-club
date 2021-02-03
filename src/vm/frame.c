@@ -401,3 +401,21 @@ void ft_unload_frame(uint32_t *pd, const void *upage)
   pagedir_set_pageinfo(page->pd, upage, NULL);
   free(page);
 }
+
+bool ft_lock_frame(uint32_t *pd, const void *upage, bool write)
+{
+  return load_frame(pd, upage, write, true);
+}
+
+void ft_unlock_frame(uint32_t *pd, const void *upage)
+{
+  struct page *page;
+  ASSERT(is_user_vaddr);
+  page = pagedir_get_pageinfo(pd, upage);
+  if (page == NULL)
+    return;
+  ASSERT(page->fm != NULL);
+  lock_acquire(&ft_lock);
+  page->fm->fm_lock--;
+  lock_release(&ft_lock);
+}

@@ -23,5 +23,6 @@ void init_frame(struct frame *f);
 
 bool ft_load_frame(uint32_t *pd, const void *upage, bool write);
 void ft_unload_frame(uint32_t *pd, const void *upage);
-
+bool ft_lock_frame(uint32_t *pd, const void *upage, bool write);
+void ft_unlock_frame(uint32_t *pd, const void *upage);
 #endif
