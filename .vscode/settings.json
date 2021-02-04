@@ -20,6 +20,8 @@
 		"type_traits": "c",
 		"utility": "c",
 		"syscall.h": "c",
-		"vaddr.h": "c"
+		"vaddr.h": "c",
+		"frame.h": "c",
+		"interrupt.h": "c"
 	}
 }

@@ -170,6 +170,16 @@ syscall_handler(struct intr_frame *f)
     close((int)arg[0]);
     break;
 
+  case SYS_MMAP:
+    getargu(f->esp, &arg[0], 2);
+    mmap((int) arg[0], arg[1]);
+    break;
+  
+  case SYS_MUNMAP:
+  getargu(f->esp, &arg[0], 1);
+  munmap((int) arg[0]);
+  break;
+
   default:
     exit(-1);
     break;

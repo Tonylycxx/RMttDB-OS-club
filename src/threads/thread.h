@@ -5,6 +5,7 @@
 #include <list.h>
 #include <stdint.h>
 #include "threads/synch.h"
+#include "vm/mmap.h"
 
 /* States in a thread's life cycle. */
 enum thread_status
@@ -92,19 +93,22 @@ struct thread
    struct list_elem allelem;  /* List element for all threads list. */
 
    /* Shared between thread.c and synch.c. */
-   struct list_elem elem;     /* List element. */
+   struct list_elem elem; /* List element. */
 
-   int64_t blocked_ticks;     /* Number of ticks thread has blocked */
+   int64_t blocked_ticks; /* Number of ticks thread has blocked */
 
-   int ret_val;                     /* Thread's return value, used in syscall exit() */
-   struct semaphore wait_child;     /* A semaphore used to synchronize with parent thread, in order to transmit information during creating a new thread */
-   struct thread *parent_thread;    /* Pointer points to parent thread, used to synchronize with parent thread */
-   struct list child_list;          /* A list includes all the child threads */
+   int ret_val;                  /* Thread's return value, used in syscall exit() */
+   struct semaphore wait_child;  /* A semaphore used to synchronize with parent thread, in order to transmit information during creating a new thread */
+   struct thread *parent_thread; /* Pointer points to parent thread, used to synchronize with parent thread */
+   struct list child_list;       /* A list includes all the child threads */
 
-   struct list opened_files;        /* A list includes all thread's opened filed */
-   int cur_fd;                      /* Next fd allocate to next open file */
-   struct file *this_file;          /* Pointer points to the executable file current process running */
-   bool load_result;                /* A boolean variable used to make sure whether a child process is successfully loaded */
+   struct list opened_files; /* A list includes all thread's opened filed */
+   int cur_fd;               /* Next fd allocate to next open file */
+   struct file *this_file;   /* Pointer points to the executable file current process running */
+   bool load_result;         /* A boolean variable used to make sure whether a child process is successfully loaded */
+
+   void *user_esp;
+   struct mmap *mfiles;
 
 #ifdef USERPROG
    /* Owned by userprog/process.c. */
@@ -118,18 +122,18 @@ struct thread
 /* Struct to save child processes infomation */
 struct saved_child
 {
-   tid_t tid;                 /* This thread's tid */
-   int ret_val;               /* This thread's return value used in syscall exit() */
-   struct list_elem elem;     /* List elem to make a list */
-   struct semaphore sema;     /* Semaphore used in syscall wait() to wait a certain child process(thread) */
+   tid_t tid;             /* This thread's tid */
+   int ret_val;           /* This thread's return value used in syscall exit() */
+   struct list_elem elem; /* List elem to make a list */
+   struct semaphore sema; /* Semaphore used in syscall wait() to wait a certain child process(thread) */
 };
 
 /* Struct to save a thread's opened files */
 struct opened_file
 {
-   struct file *f;            /* Pointer points to a file */
-   int fd;                    /* This file's fd (might be different according to process) */
-   struct list_elem elem;     /* List elem to make a list */
+   struct file *f;        /* Pointer points to a file */
+   int fd;                /* This file's fd (might be different according to process) */
+   struct list_elem elem; /* List elem to make a list */
 };
 
 /* If false (default), use round-robin scheduler.

@@ -12,7 +12,7 @@
 #include "devices/block.h"
 
 #define PAGE_TYPE_ZERO 0x01
-#define PAGE_FILE_KERNEL 0x02
+#define PAGE_TYPE_KERNEL 0x02
 #define PAGE_TYPE_FILE 0x04
 
 #define WRITABLE_TO_FILE 0x01
@@ -52,11 +52,12 @@ bool frame_less(const struct hash_elem *a,
                 const struct hash_elem *b,
                 void *aux);
 
-struct page *create_page_with_param(const void *upage, int type, bool readonly, uint32_t *pd, struct file *f, off_t offset, const void *kpage);
+struct page *create_page_with_param(const void *upage, int type, uint8_t writable, uint32_t *pd, struct file *f, off_t offset, const void *kpage);
 struct page *create_page_without_param();
+void destroy_page(struct page *p);
 void page_set_upage(struct page *p, const void *upage);
 void page_set_type(struct page *p, int type);
-void page_set_readonly(struct page *p, uint8_t writable);
+void page_set_writable(struct page *p, uint8_t writable);
 void page_set_pagedir(struct page *p, uint32_t *pd);
 void page_set_fileinfo(struct page *p, struct file *file, off_t offset);
 void page_set_kpage(struct page *p, const void *kpage);

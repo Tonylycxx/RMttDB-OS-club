@@ -270,7 +270,7 @@ static bool load_frame(uint32_t *pd, const void *upage, bool write, bool keep_lo
         frame->io = false;
         cond_broadcast(&frame->io_done, &ft_lock);
       }
-      else if (page->page_type & PAGE_FILE_KERNEL)
+      else if (page->page_type & PAGE_TYPE_KERNEL)
       {
         kpage = (void *)page->data.kpage;
         ASSERT(kpage != NULL);
@@ -391,7 +391,7 @@ void ft_unload_frame(uint32_t *pd, const void *upage)
     swap_release(page->data.swap_sector);
     page->swapped_or_not = false;
   }
-  else if (page->page_type & PAGE_FILE_KERNEL)
+  else if (page->page_type & PAGE_TYPE_KERNEL)
   {
     kpage = (void *)page->data.kpage;
     ASSERT(kpage != NULL);

@@ -14,15 +14,20 @@ struct page *create_page_without_param(void)
   return new_page;
 }
 
-struct page *create_page_with_param(const void *upage, int type, bool read_only, uint32_t *pd, struct file *f, off_t offset, const void *kpage)
+struct page *create_page_with_param(const void *upage, int type, uint8_t writable, uint32_t *pd, struct file *f, off_t offset, const void *kpage)
 {
   struct page *new_page = (struct page *)calloc(1, sizeof(struct page));
   page_set_upage(new_page, upage);
   page_set_type(new_page, type);
-  page_set_readonly(new_page, read_only);
+  page_set_writable(new_page, writable);
   page_set_pagedir(new_page, pd);
   page_set_fileinfo(new_page, f, offset);
   page_set_kpage(new_page, kpage);
+}
+
+void destroy_page(struct page *p)
+{
+  free(p);
 }
 
 void page_set_upage(struct page *p, const void *upage)
@@ -35,7 +40,7 @@ void page_set_type(struct page *p, int type)
   p->page_type = type;
 }
 
-void page_set_readonly(struct page *p, uint8_t writable)
+void page_set_writable(struct page *p, uint8_t writable)
 {
   p->writable = writable;
 }

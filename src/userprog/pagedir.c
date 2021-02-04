@@ -284,10 +284,10 @@ struct page *pagedir_get_pageinfo(uint32_t *pd, const void *upage)
   ASSERT(is_user_vaddr(upage));
   ASSERT(pd != init_page_dir);
 
-  struct page *pte = lookup_page(pd, upage, false);
+  uint32_t *pte = lookup_page(pd, upage, false);
   if (pte != NULL)
   {
-    struct page **pie = ((struct page **)pg_next_page(pte)) + pg_ofs(upage);
+    struct page **pie = ((struct page **)pg_next_page(pte)) + pt_no(upage);
     return *pie;
   }
   else
@@ -300,7 +300,7 @@ void pagedir_unload_page(uint32_t *pd, const void *upage)
   ASSERT(is_user_vaddr(upage));
   ASSERT(pd != init_page_dir);
 
-  struct page *p = pagedir_get_page(pd, upage);
+  struct page *p = pagedir_get_pageinfo(pd, upage);
   if (p != NULL)
     ft_unload_frame(pd, upage);
 }

@@ -531,6 +531,8 @@ init_thread(struct thread *t, const char *name, int priority)
   t->parent_thread = NULL;
   t->cur_fd = 2;
   t->this_file = NULL;
+  t->user_esp = NULL;
+  t->mfiles = NULL;
   list_init(&t->child_list);
   list_init(&t->opened_files);
 
