@@ -142,6 +142,11 @@ page_fault(struct intr_frame *f)
   asm("movl %%cr2, %0"
       : "=r"(fault_addr));
 
+#ifndef VM
+  if (!syscall_translate_vaddr(fault_addr, false))
+    thread_exit_with_return_value(f, -1);
+#endif
+
   /* Turn interrupts back on (they were only off so that we could
      be assured of reading CR2 before it changed). */
   intr_enable();
@@ -155,7 +160,7 @@ page_fault(struct intr_frame *f)
   user = (f->error_code & PF_U) != 0;
 
 #ifdef VM
-  if(not_present && page_pagefault_handler(fault_addr, write, user ? f->esp : thread_current()->esp))
+  if (not_present && page_pagefault_handler(fault_addr, write, user ? f->esp : thread_current()->esp))
     return;
   else
     thread_exit_with_retval(f, -1);

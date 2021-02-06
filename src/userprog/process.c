@@ -58,9 +58,9 @@ tid_t process_execute(const char *file_name)
     palloc_free_page(fn_copy);
     return TID_ERROR;
   }
-  
+
   tid = thread_create(_pcb.exec_name, PRI_DEFAULT, start_process, &_pcb); // Try to create a new process.
-  
+
   /* If create failed, free allocated resources and return an error tid. */
   if (tid != TID_ERROR)
   {
@@ -437,7 +437,7 @@ bool load(const char *file_name, void (**eip)(void), void **esp)
 
 done:
   /* We arrive here whether the load is successful or not. */
-  file_close(file);
+  // file_close(file);
   release_file_lock();
   return success;
 }
@@ -614,6 +614,7 @@ install_page(void *upage, void *kpage, bool writable)
 
 struct mmap_handler *syscall_get_mmap_handle(mapid_t mapid)
 {
+#ifdef VM
   struct thread *cur = thread_current();
   struct list_elem *e;
   struct mmap_handler *mh;
@@ -627,10 +628,12 @@ struct mmap_handler *syscall_get_mmap_handle(mapid_t mapid)
     }
   }
   return NULL;
+#endif
 }
 
 bool delete_mmap_handle(struct mmap_handler *mh)
 {
+#ifdef VM
   struct thread *cur = thread_current();
   struct list_elem *e;
   struct mmap_handler *tmp_mh;
@@ -648,4 +651,5 @@ bool delete_mmap_handle(struct mmap_handler *mh)
       }
     }
   }
+#endif
 }

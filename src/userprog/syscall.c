@@ -431,16 +431,19 @@ void syscall_close(int fd)
 
 bool mmap_check_mmap_vaddr(struct thread *cur, const void *vaddr, int num_page)
 {
+#ifdef VM
   bool res = true;
   int i;
   for (i = 0; i < num_page; i++)
     if (!page_available_upage(cur->page_table, vaddr + i * PGSIZE))
       res = false;
   return res;
+#endif
 }
 
 bool mmap_install_page(struct thread *cur, struct mmap_handler *mh)
 {
+#ifdef VM
   bool res = true;
   int i;
   for (i = 0; i < mh->num_page; i++)
@@ -451,10 +454,12 @@ bool mmap_install_page(struct thread *cur, struct mmap_handler *mh)
       if (!page_install_file(cur->page_table, mh, mh->mmap_addr + i * PGSIZE))
         res = false;
   return res;
+#endif
 }
 
 void mmap_read_file(struct mmap_handler *mh, void *upage, void *kpage)
 {
+#ifdef VM
   if (mh->is_segment)
   {
     void *addr = mh->mmap_addr + mh->num_page * PGSIZE + mh->last_page_size;
@@ -483,10 +488,12 @@ void mmap_read_file(struct mmap_handler *mh, void *upage, void *kpage)
     else
       file_read_at(mh->mmap_file, kpage, PGSIZE, upage - mh->mmap_addr + mh->file_ofs);
   }
+#endif
 }
 
 void mmap_write_file(struct mmap_handler *mh, void *upage, void *kpage)
 {
+#ifdef VM
   if (mh->writable)
   {
     if (mh->is_segment)
@@ -508,10 +515,12 @@ void mmap_write_file(struct mmap_handler *mh, void *upage, void *kpage)
         file_write_at(mh->mmap_file, kpage, PGSIZE, upage - mh->mmap_addr + mh->file_ofs);
     }
   }
+#endif
 }
 
 bool mmap_load_segment(struct file *file, off_t ofs, uint8_t *upage, uint32_t read_bytes, uint32_t zero_bytes, bool writable)
 {
+#ifdef VM
   ASSERT(!((read_bytes + zero_bytes) & PGMASK));
   struct thread *cur = thread_current();
   mapid_t mapid = cur->next_mapid++;
@@ -537,10 +546,12 @@ bool mmap_load_segment(struct file *file, off_t ofs, uint8_t *upage, uint32_t re
   if (!mmap_install_page(cur, mh))
     return false;
   return true;
+#endif
 }
 
 void syscall_mmap(struct intr_frame *f, int fd, const void *obj_vaddr)
 {
+#ifdef VM
   if (fd == STDIN_FILENO || fd == STDOUT_FILENO)
   {
     f->eax = MAP_FAILED;
@@ -592,10 +603,12 @@ void syscall_mmap(struct intr_frame *f, int fd, const void *obj_vaddr)
     f->eax = MAP_FAILED;
     return;
   }
+#endif
 }
 
 void syscall_munmap(struct intr_frame *f, mapid_t mapid)
 {
+#ifdef VM
   struct thread *cur = thread_current();
   int i;
   if (list_empty(&cur->mmap_file_list))
@@ -623,4 +636,5 @@ void syscall_munmap(struct intr_frame *f, mapid_t mapid)
     f->eax = MAP_FAILED;
     return;
   }
+#endif
 }
