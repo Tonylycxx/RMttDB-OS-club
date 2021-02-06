@@ -228,7 +228,7 @@ syscall_handler(struct intr_frame *f)
     break;
 
   case SYS_MMAP:
-    syscall_mmap(f, *((int *)arg1), arg2);
+    syscall_mmap(f, *((int *)arg1), *((void **)arg2));
     break;
 
   case SYS_MUNMAP:

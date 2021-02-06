@@ -22,6 +22,7 @@
 		"syscall.h": "c",
 		"vaddr.h": "c",
 		"frame.h": "c",
-		"interrupt.h": "c"
+		"interrupt.h": "c",
+		"debug.h": "c"
 	}
 }

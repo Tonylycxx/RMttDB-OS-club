@@ -94,7 +94,10 @@ bool page_pagefault_handler(const void *vaddr, bool to_write, void *esp)
   ASSERT(!(t != NULL && t->status == FRAME));
 
   if (to_write == true && t != NULL && t->writable == false)
+  {
+    lock_release(&page_lock);
     return false;
+  }
 
   if (upage >= PAGE_STACK_UNDERLINE)
   {
@@ -301,8 +304,9 @@ bool page_status_eviction(struct thread *cur, void *upage, void *index, bool to_
     }
     pagedir_clear_page(cur->pagedir, upage);
   }
-  else {
-    if(t != NULL)
+  else
+  {
+    if (t != NULL)
       printf("%s\n", t->status == FILE ? "file" : "swap");
     else
       puts("NULL");
@@ -326,13 +330,13 @@ void page_destroy_frame_likes(struct hash_elem *e, void *aux UNUSED)
 {
   struct page_table_elem *t = hash_entry(e, struct page_table_elem, elem);
 
-  if(t->status == FRAME)
+  if (t->status == FRAME)
   {
     pagedir_clear_page(thread_current()->pagedir, t->key);
     frame_free_frame(t->value);
   }
-  else if(t->status == SWAP)
-    swap_free((index_t) t->value);
+  else if (t->status == SWAP)
+    swap_free((index_t)t->value);
   free(t);
 }
 
