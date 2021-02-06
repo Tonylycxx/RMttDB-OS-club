@@ -15,6 +15,7 @@
         "page.h": "c",
         "pagedir.h": "c",
         "swap.h": "c",
-        "syscall.h": "c"
+        "syscall.h": "c",
+        "main.h": "c"
     }
 }
