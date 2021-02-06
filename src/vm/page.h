@@ -6,60 +6,38 @@
 #include <stdio.h>
 #include <hash.h>
 #include <list.h>
-#include "filesys/inode.h"
-#include "vm/page.h"
-#include "vm/frame.h"
-#include "devices/block.h"
+#include "threads/palloc.h"
 
-#define PAGE_TYPE_ZERO 0x01
-#define PAGE_TYPE_KERNEL 0x02
-#define PAGE_TYPE_FILE 0x04
+typedef struct hash page_table_t;
 
-#define WRITABLE_TO_FILE 0x01
-#define WRITABLE_TO_SWAP 0x02
-
-struct file_info
+enum page_status
 {
-  struct file *file;
-  off_t file_end_offset;
+  FRAME,
+  SWAP,
+  FILE
 };
 
-union page_data
+struct page_table_elem
 {
-  const void *kpage;
-  block_sector_t swap_sector;
-  struct file_info file_info;
+  void *key, *value, *origin;
+  enum page_status status;
+  bool writable;
+  struct hash_elem elem;
 };
 
-struct page
-{
-  void *upage;
-  uint32_t *pd;
-  uint8_t page_type;
-  uint8_t writable;
-  bool accessed_or_not;
-  bool dirty_or_not;
-  bool swapped_or_not;
+void page_lock_init();
+page_table_t *page_create();
+bool page_init(page_table_t *page_table);
+void page_destroy(page_table_t *page_table);
+struct page_table_elem *page_find(page_table_t *page_table, void *upage);
+struct page_table_elem *page_find_with_lock(page_table_t *page_table, void *upage);
 
-  struct list_elem elem;
-  struct frame *fm;
-  struct thread *user;
-  union page_data data;
-};
+bool page_pagefault_handler(const void *vaddr, bool to_write, void *esp);
 
-unsigned frame_hash(const struct hash_elem *e, void *aux);
-bool frame_less(const struct hash_elem *a,
-                const struct hash_elem *b,
-                void *aux);
-
-struct page *create_page_with_param(const void *upage, int type, uint8_t writable, uint32_t *pd, struct file *f, off_t offset, const void *kpage);
-struct page *create_page_without_param();
-void destroy_page(struct page *p);
-void page_set_upage(struct page *p, const void *upage);
-void page_set_type(struct page *p, int type);
-void page_set_writable(struct page *p, uint8_t writable);
-void page_set_pagedir(struct page *p, uint32_t *pd);
-void page_set_fileinfo(struct page *p, struct file *file, off_t offset);
-void page_set_kpage(struct page *p, const void *kpage);
+bool page_set_frame(void *upage, void *kpage, bool writable);
+bool page_available_upage(page_table_t *page_table, void *upage);
+bool page_install_file(page_table_t *page_table, struct mmap_handler *mh, void *key);
+bool page_status_eviction(struct thread *cur, void *upage, void *index, bool to_swap);
+bool page_unmap(page_table_t *page_table, void *upage);
 
 #endif

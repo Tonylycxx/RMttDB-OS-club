@@ -1,5 +1,5 @@
-#include "userprog/syscall.h"
 #include <stdio.h>
+#include <string.h>
 #include <syscall-nr.h>
 #include "threads/interrupt.h"
 #include "threads/thread.h"
@@ -11,22 +11,24 @@
 #include "userprog/pagedir.h"
 #include "devices/input.h"
 #include "devices/shutdown.h"
+#include "lib/user/syscall.h"
+#include "userprog/syscall.h"
 
 static void syscall_handler(struct intr_frame *);
 
-static void halt(void);
-static void exit(int);
-static void exec(struct intr_frame *f, const char *cmd_line);
-static void wait(struct intr_frame *f, tid_t tid);
-static void create(struct intr_frame *f, const char *file, unsigned initial_size);
-static void remove(struct intr_frame *f, const char *file);
-static void open(struct intr_frame *f, const char *file_name);
-static void filesize(struct intr_frame *f, int fd);
-static void read(struct intr_frame *f, int fd, char *buffer, unsigned size);
-static void write(struct intr_frame *f, int fd, const char *buffer, unsigned size);
-static void seek(int fd, unsigned position);
-static void tell(struct intr_frame *f, int fd);
-static void close(int);
+static void syscall_halt(void);
+static void syscall_exit(int);
+static void syscall_exec(struct intr_frame *f, const char *cmd_line);
+static void syscall_wait(struct intr_frame *f, tid_t tid);
+static void syscall_create(struct intr_frame *f, const char *file, unsigned initial_size);
+static void syscall_remove(struct intr_frame *f, const char *file);
+static void syscall_open(struct intr_frame *f, const char *file_name);
+static void syscall_filesize(struct intr_frame *f, int fd);
+static void syscall_read(struct intr_frame *f, int fd, char *buffer, unsigned size);
+static void syscall_write(struct intr_frame *f, int fd, const char *buffer, unsigned size);
+static void syscall_seek(int fd, unsigned position);
+static void syscall_tell(struct intr_frame *f, int fd);
+static void syscall_close(int);
 
 /* Initate system call system, bound system call to interrupt 0.30 */
 void syscall_init(void)
@@ -34,41 +36,12 @@ void syscall_init(void)
   intr_register_int(0x30, 3, INTR_ON, syscall_handler, "syscall");
 }
 
-/* Check pointer's validation
-   Firstly check whether it points to user zone
-   Secondly check whether pages it points to is valid. */
-void check_valid_addr(const void *ptr_to_check)
+void thread_exit_with_retval(struct intr_frame *f, int ret_val)
 {
   struct thread *cur = thread_current();
-  if (!ptr_to_check || (void *)ptr_to_check <= 0x08048000 || !is_user_vaddr(ptr_to_check))
-    exit(-1);
-  else if (pagedir_get_page(cur->pagedir, ptr_to_check) == NULL)
-    exit(-1);
-}
-
-/* When a argument points to a string, use this function
-   to check each char in order to garuntee the safty. */
-void check_valid_argu(char *ptr_to_check)
-{
-  for (;;)
-  {
-    check_valid_addr(ptr_to_check);
-    if (*ptr_to_check == '\0')
-      return;
-    ptr_to_check++;
-  }
-}
-
-/* Get first 'argument_number' arguments and save in array arg. */
-void getargu(void *esp, int *arg, int argument_number)
-{
-  int i;
-  for (i = 0; i < argument_number; i++)
-  {
-    int *res = (int *)esp + i + 1;
-    check_valid_addr(res + 1);
-    arg[i] = *res;
-  }
+  cur->ret_val = ret_val;
+  f->eax = (uint32_t)ret_val;
+  thread_exit();
 }
 
 /* Find certain file opened by current thread and return a struct. */
@@ -87,101 +60,183 @@ struct opened_file *get_op_file(int fd)
   return NULL;
 }
 
+bool syscall_check_user_vaddr(const void *vaddr, bool write)
+{
+  if (vaddr == NULL || !is_user_vaddr(vaddr) || vaddr <= 0x08048000)
+    return false;
+
+#ifdef VM
+  struct page_table_elem *base = page_find_with_lock(thread_current()->page_table, pg_round_down(vaddr));
+  if (base == NULL)
+    return page_pagefault_handler(vaddr, write, thread_current()->esp);
+  else
+    return !(write && !(base->writable));
+#else
+  ASSERT(vaddr != NULL);
+  return pagedir_get_page(thread_current()->pagedir, vaddr) != NULL;
+#endif
+}
+
+bool syscall_check_user_string(const char *ustr)
+{
+  if (!syscall_check_user_vaddr(ustr, false))
+    return false;
+  while (*ustr != '\0')
+  {
+    ustr++;
+    if (((int)ustr & PGMASK) == 0)
+    {
+      if (!syscall_check_user_vaddr(ustr, false))
+        return false;
+    }
+  }
+  return true;
+}
+
+bool syscall_check_user_buffer(const char *ustr, int size, bool write)
+{
+  if (!syscall_check_user_vaddr(ustr + size - 1, write))
+    return false;
+  size >>= 12;
+  do
+  {
+    if (!syscall_check_user_vaddr(ustr, write))
+      return false;
+    ustr += 1 << 12;
+  } while (size--);
+  return true;
+}
+
 /* Syscall handler, which call corresponding function to handle
    different system calls. */
 static void
 syscall_handler(struct intr_frame *f)
 {
-  check_valid_addr(f->esp);
-  check_valid_addr(f->esp + 1);
+
+#ifdef VM
+  thread_current()->esp = f->esp;
+#endif
+  if (!syscall_check_user_buffer(f->esp, 4, false))
+    thread_exit_with_retval(f, -1);
 
   int status = *(int *)f->esp;
-  int arg[3];
+  void *arg1 = f->esp + 4, *arg2 = f->esp + 8, *arg3 = f->esp + 12;
+
+  switch (status)
+  {
+  case SYS_EXIT:
+  case SYS_EXEC:
+  case SYS_WAIT:
+  case SYS_TELL:
+  case SYS_CLOSE:
+  case SYS_REMOVE:
+  case SYS_OPEN:
+  case SYS_FILESIZE:
+
+#ifdef VM
+  case SYS_MUNMAP:
+#endif
+
+#ifdef FILESYS
+  case SYS_CHDIR:
+  case SYS_MKDIR:
+  case SYS_ISDIR:
+  case SYS_INUMBER:
+#endif
+
+    if (!syscall_check_user_buffer(arg1, 4, false))
+      thread_exit_with_retval(f, -1);
+    break;
+
+  case SYS_CREATE:
+  case SYS_SEEK:
+
+#ifdef VM
+  case SYS_MMAP:
+#endif
+
+#ifdef FILESYS
+  case SYS_READDIR:
+#endif
+
+    if (!syscall_check_user_buffer(arg1, 8, false))
+      thread_exit_with_retval(f, -1);
+    break;
+
+  case SYS_READ:
+  case SYS_WRITE:
+    if (!syscall_check_user_buffer(arg1, 12, false))
+      thread_exit_with_retval(f, -1);
+    break;
+
+  default:
+    break;
+  }
 
   switch (status)
   {
   case SYS_HALT:
-    halt();
+    syscall_halt();
     break;
 
   case SYS_EXIT:
-    getargu(f->esp, &arg[0], 1);
-    exit(arg[0]);
+    syscall_exit(*((int *)arg1));
     break;
 
   case SYS_EXEC:
-    getargu(f->esp, &arg[0], 1);
-    check_valid_argu((char *)arg[0]);
-    exec(f, (char *)arg[0]);
+    syscall_exec(f, *((char **)arg1));
     break;
 
   case SYS_WAIT:
-    getargu(f->esp, &arg[0], 1);
-    wait(f, (tid_t)arg[0]);
+    syscall_wait(f, *((tid_t *)arg1));
     break;
 
   case SYS_CREATE:
-    getargu(f->esp, &arg[0], 2);
-    check_valid_argu((char *)arg[0]);
-    create(f, (char *)arg[0], (unsigned)arg[1]);
+    syscall_create(f, *((char **)arg1), *((unsigned *)arg2));
     break;
 
   case SYS_REMOVE:
-    getargu(f->esp, &arg[0], 1);
-    check_valid_argu((char *)arg[0]);
-    remove(f, (char *)arg[0]);
+    syscall_remove(f, *((char **)arg1));
     break;
 
   case SYS_OPEN:
-    getargu(f->esp, &arg[0], 1);
-    check_valid_argu((char *)arg[0]);
-    open(f, (char *)arg[0]);
+    syscall_open(f, *((char **)arg1));
     break;
 
   case SYS_FILESIZE:
-    getargu(f->esp, &arg[0], 1);
-    filesize(f, (int)arg[0]);
+    syscall_filesize(f, *((int *)arg1));
     break;
 
   case SYS_READ:
-    getargu(f->esp, &arg[0], 3);
-    check_valid_argu((char *)arg[1]);
-    read(f, (int)arg[0], (char *)arg[1], (unsigned)arg[2]);
+    syscall_read(f, *((int *)arg1), *((char **)arg2), *((unsigned *)arg3));
     break;
 
   case SYS_WRITE:
-    getargu(f->esp, &arg[0], 3);
-    check_valid_argu((char *)arg[1]);
-    write(f, (int)arg[0], (char *)arg[1], (unsigned)arg[2]);
+    syscall_write(f, *((int *)arg1), *((char **)arg2), *((unsigned *)arg3));
     break;
 
   case SYS_SEEK:
-    getargu(f->esp, &arg[0], 2);
-    seek((int)arg[0], (unsigned)arg[1]);
+    syscall_seek(*((int *)arg1), *((unsigned *)arg2));
     break;
 
   case SYS_TELL:
-    getargu(f->esp, &arg[0], 1);
-    tell(f, (int)arg[0]);
+    syscall_tell(f, *((int *)arg1));
     break;
 
   case SYS_CLOSE:
-    getargu(f->esp, &arg[0], 1);
-    close((int)arg[0]);
+    syscall_close(*((int *)arg1));
     break;
 
   case SYS_MMAP:
-    getargu(f->esp, &arg[0], 2);
-    mmap((int) arg[0], arg[1]);
+    syscall_mmap(f, *((int *)arg1), arg2);
     break;
-  
+
   case SYS_MUNMAP:
-  getargu(f->esp, &arg[0], 1);
-  munmap((int) arg[0]);
-  break;
+    syscall_munmap(f, *((int *)arg1));
+    break;
 
   default:
-    exit(-1);
+    thread_exit_with_retval(f, -1);
     break;
   }
 }
@@ -189,52 +244,58 @@ syscall_handler(struct intr_frame *f)
 /* Some system calls downwards needed file system lock. */
 
 /* System handler function for halt() */
-void halt(void)
+void syscall_halt(void)
 {
   shutdown_power_off();
 }
 
 /* System handler function for exit() */
-void exit(int status)
+void syscall_exit(int status)
 {
   thread_current()->ret_val = status;
   thread_exit();
 }
 
 /* System handler function for exec() */
-void exec(struct intr_frame *f, const char *cmd_line)
+void syscall_exec(struct intr_frame *f, const char *cmd_line)
 {
+  if (!syscall_check_user_string(cmd_line))
+    thread_exit_with_retval(f, -1);
   f->eax = process_execute(cmd_line);
 }
 
 /* System handler function for wait() */
-void wait(struct intr_frame *f, tid_t tid)
+void syscall_wait(struct intr_frame *f, tid_t tid)
 {
   f->eax = process_wait(tid);
 }
 
 /* System handler function for create() */
-void create(struct intr_frame *f, const char *file, unsigned initial_size)
+void syscall_create(struct intr_frame *f, const char *file, unsigned initial_size)
 {
+  if (!syscall_check_user_string(file))
+    thread_exit_with_retval(f, -1);
   acquire_file_lock();
   f->eax = filesys_create(file, initial_size);
   release_file_lock();
 }
 
 /* System handler function for remove() */
-void remove(struct intr_frame *f, const char *file)
+void syscall_remove(struct intr_frame *f, const char *file)
 {
+  if (!syscall_check_user_string(file))
+    thread_exit_with_retval(f, -1);
   acquire_file_lock();
   f->eax = filesys_remove(file);
   release_file_lock();
 }
 
 /* System handler function for open() */
-void open(struct intr_frame *f, const char *file_name)
+void syscall_open(struct intr_frame *f, const char *file_name)
 {
-  if (file_name == NULL)
+  if (file_name == NULL || !syscall_check_user_string(file_name))
   {
-    f->eax = -1;
+    thread_exit_with_retval(f, -1);
     return;
   }
   acquire_file_lock();
@@ -254,7 +315,7 @@ void open(struct intr_frame *f, const char *file_name)
 }
 
 /* System handler function for filesize() */
-void filesize(struct intr_frame *f, int fd)
+void syscall_filesize(struct intr_frame *f, int fd)
 {
   if (fd == STDIN_FILENO || fd == STDOUT_FILENO)
   {
@@ -273,8 +334,10 @@ void filesize(struct intr_frame *f, int fd)
 }
 
 /* System handler function for read() */
-void read(struct intr_frame *f, int fd, char *buffer, unsigned size)
+void syscall_read(struct intr_frame *f, int fd, char *buffer, unsigned size)
 {
+  if (!syscall_check_user_buffer(buffer, size, true))
+    thread_exit_with_retval(f, -1);
   if (fd == STDIN_FILENO)
   {
     unsigned i;
@@ -300,8 +363,10 @@ void read(struct intr_frame *f, int fd, char *buffer, unsigned size)
 }
 
 /* System handler function for write() */
-void write(struct intr_frame *f, int fd, const char *buffer, unsigned size)
+void syscall_write(struct intr_frame *f, int fd, const char *buffer, unsigned size)
 {
+  if (!syscall_check_user_buffer(buffer, size, false))
+    thread_exit_with_retval(f, -1);
   if (fd == STDOUT_FILENO)
   {
     putbuf((const char *)buffer, size);
@@ -320,7 +385,7 @@ void write(struct intr_frame *f, int fd, const char *buffer, unsigned size)
 }
 
 /* System handler function for seek() */
-void seek(int fd, unsigned position)
+void syscall_seek(int fd, unsigned position)
 {
   struct opened_file *op_file = get_op_file(fd);
   if (op_file && op_file->f)
@@ -332,7 +397,7 @@ void seek(int fd, unsigned position)
 }
 
 /* System handler function for tell() */
-void tell(struct intr_frame *f, int fd)
+void syscall_tell(struct intr_frame *f, int fd)
 {
   if (fd == STDIN_FILENO || fd == STDOUT_FILENO)
   {
@@ -351,7 +416,7 @@ void tell(struct intr_frame *f, int fd)
 }
 
 /* System handler function for close() */
-void close(int fd)
+void syscall_close(int fd)
 {
   struct opened_file *op_file = get_op_file(fd);
   if (op_file && op_file->f)
@@ -361,5 +426,201 @@ void close(int fd)
     release_file_lock();
     list_remove(&op_file->elem);
     free(op_file);
+  }
+}
+
+bool mmap_check_mmap_vaddr(struct thread *cur, const void *vaddr, int num_page)
+{
+  bool res = true;
+  int i;
+  for (i = 0; i < num_page; i++)
+    if (!page_available_upage(cur->page_table, vaddr + i * PGSIZE))
+      res = false;
+  return res;
+}
+
+bool mmap_install_page(struct thread *cur, struct mmap_handler *mh)
+{
+  bool res = true;
+  int i;
+  for (i = 0; i < mh->num_page; i++)
+    if (!page_install_file(cur->page_table, mh, mh->mmap_addr + i * PGSIZE))
+      res = false;
+  if (mh->is_segment)
+    for (i = mh->num_page; i < mh->num_page_with_segment; i++)
+      if (!page_install_file(cur->page_table, mh, mh->mmap_addr + i * PGSIZE))
+        res = false;
+  return res;
+}
+
+void mmap_read_file(struct mmap_handler *mh, void *upage, void *kpage)
+{
+  if (mh->is_segment)
+  {
+    void *addr = mh->mmap_addr + mh->num_page * PGSIZE + mh->last_page_size;
+    if (mh->last_page_size != 0)
+      addr -= PGSIZE;
+    if (addr > upage)
+    {
+      if (addr - upage < PGSIZE)
+      {
+        file_read_at(mh->mmap_file, kpage, mh->last_page_size, upage - mh->mmap_addr + mh->file_ofs);
+        memset(kpage + mh->last_page_size, 0, PGSIZE - mh->last_page_size);
+      }
+      else
+        file_read_at(mh->mmap_file, kpage, PGSIZE, upage - mh->mmap_addr + mh->file_ofs);
+    }
+    else
+      memset(kpage, 0, PGSIZE);
+  }
+  else
+  {
+    if (mh->mmap_addr + file_length(mh->mmap_file) - upage < PGSIZE)
+    {
+      file_read_at(mh->mmap_file, kpage, mh->last_page_size, upage - mh->mmap_addr + mh->file_ofs);
+      memset(kpage + mh->last_page_size, 0, PGSIZE - mh->last_page_size);
+    }
+    else
+      file_read_at(mh->mmap_file, kpage, PGSIZE, upage - mh->mmap_addr + mh->file_ofs);
+  }
+}
+
+void mmap_write_file(struct mmap_handler *mh, void *upage, void *kpage)
+{
+  if (mh->writable)
+  {
+    if (mh->is_segment)
+    {
+      void *addr = mh->mmap_addr + mh->num_page * PGSIZE + mh->last_page_size;
+      if (addr > upage)
+      {
+        if (addr - upage < PGSIZE)
+          file_write_at(mh->mmap_file, kpage, mh->last_page_size, upage - mh->mmap_addr + mh->file_ofs);
+        else
+          file_write_at(mh->mmap_file, kpage, PGSIZE, upage - mh->mmap_addr + mh->file_ofs);
+      }
+    }
+    else
+    {
+      if (mh->mmap_addr + file_length(mh->mmap_file) - upage < PGSIZE)
+        file_write_at(mh->mmap_file, kpage, mh->last_page_size, upage - mh->mmap_addr + mh->file_ofs);
+      else
+        file_write_at(mh->mmap_file, kpage, PGSIZE, upage - mh->mmap_addr + mh->file_ofs);
+    }
+  }
+}
+
+bool mmap_load_segment(struct file *file, off_t ofs, uint8_t *upage, uint32_t read_bytes, uint32_t zero_bytes, bool writable)
+{
+  ASSERT(!((read_bytes + zero_bytes) & PGMASK));
+  struct thread *cur = thread_current();
+  mapid_t mapid = cur->next_mapid++;
+  struct mmap_handler *mh = (struct mmap_handler *)malloc(sizeof(struct mmap_handler));
+  mh->mapid = mapid;
+  mh->mmap_file = file;
+  mh->writable = writable;
+  mh->is_static_data = writable;
+  int num_page = read_bytes / PGSIZE;
+  int total_num_page = ((read_bytes + zero_bytes) / PGSIZE);
+  int last_page_used = read_bytes & PGMASK;
+  if (last_page_used != 0)
+    num_page++;
+  if (!mmap_check_mmap_vaddr(cur, upage, total_num_page))
+    return false;
+  mh->mmap_addr = upage;
+  mh->num_page = num_page;
+  mh->last_page_size = last_page_used;
+  mh->num_page_with_segment = total_num_page;
+  mh->is_segment = true;
+  mh->file_ofs = ofs;
+  list_push_back(&cur->mmap_file_list, &mh->elem);
+  if (!mmap_install_page(cur, mh))
+    return false;
+  return true;
+}
+
+void syscall_mmap(struct intr_frame *f, int fd, const void *obj_vaddr)
+{
+  if (fd == STDIN_FILENO || fd == STDOUT_FILENO)
+  {
+    f->eax = MAP_FAILED;
+    return;
+  }
+  if (obj_vaddr == NULL || ((uint32_t)obj_vaddr % (uint32_t)PGSIZE != 0))
+  {
+    f->eax = MAP_FAILED;
+    return;
+  }
+
+  struct thread *cur = thread_current();
+  struct opened_file *of = get_op_file(fd);
+
+  if (of != NULL)
+  {
+    mapid_t mapid = cur->next_mapid++;
+    struct mmap_handler *mh = (struct mmap_handler *)malloc(sizeof(struct mmap_handler));
+    mh->mapid = mapid;
+    mh->mmap_file = file_reopen(of->f);
+    mh->writable = true;
+    mh->is_segment = false;
+    mh->is_static_data = false;
+    mh->file_ofs = 0;
+    off_t file_size = file_length(mh->mmap_file);
+    int num_page = file_size / PGSIZE;
+    int last_page_used = file_size % PGSIZE;
+    if (last_page_used != 0)
+      num_page++;
+    if (!mmap_check_mmap_vaddr(cur, obj_vaddr, num_page))
+    {
+      f->eax = MAP_FAILED;
+      return;
+    }
+    mh->mmap_addr = obj_vaddr;
+    mh->num_page = num_page;
+    mh->num_page_with_segment = num_page;
+    mh->last_page_size = last_page_used;
+    list_push_back(&cur->mmap_file_list, &mh->elem);
+    if (!mmap_install_page(cur, mh))
+    {
+      f->eax = MAP_FAILED;
+      return;
+    }
+    f->eax = (uint32_t)mapid;
+  }
+  else
+  {
+    f->eax = MAP_FAILED;
+    return;
+  }
+}
+
+void syscall_munmap(struct intr_frame *f, mapid_t mapid)
+{
+  struct thread *cur = thread_current();
+  int i;
+  if (list_empty(&cur->mmap_file_list))
+  {
+    f->eax = MAP_FAILED;
+    return;
+  }
+  struct mmap_handler *mh = syscall_get_mmap_handle(mapid);
+  if (mh == NULL)
+  {
+    f->eax = MAP_FAILED;
+    return;
+  }
+  for (i = 0; i < mh->num_page; i++)
+  {
+    if (!page_unmap(cur->page_table, mh->mmap_addr + i * PGSIZE))
+    {
+      delete_mmap_handle(mh);
+      f->eax = MAP_FAILED;
+      return;
+    }
+  }
+  if (!delete_mmap_handle(mh))
+  {
+    f->eax = MAP_FAILED;
+    return;
   }
 }

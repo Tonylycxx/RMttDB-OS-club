@@ -1,64 +1,107 @@
-#include <stdbool.h>
-#include <debug.h>
-#include <bitmap.h>
-#include "threads/vaddr.h"
-#include "vm/swap.h"
+//
+// Created by sjtu-ypm on 19-4-11.
+//
 
-#define SECTORS_PER_PAGE (PGSIZE / BLOCK_SECTOR_SIZE)
 
-static bool swap_map_allocate(block_sector_t *sector_page);
-static void swap_map_release(block_sector_t sector);
+#include <lib/debug.h>
+#include <threads/pte.h>
+#include <threads/malloc.h>
+#include "swap.h"
+#include "../lib/kernel/hash.h"
 
-struct block *swap_device;
+const int BLOCK_PER_PAGE = PGSIZE / BLOCK_SECTOR_SIZE;
 
-static struct bitmap *swap_map;
 
-void swap_init(void)
-{
-  ASSERT(PGSIZE % BLOCK_SECTOR_SIZE == 0);
-  swap_device = block_get_role(BLOCK_SWAP);
-  swap_map = bitmap_create(block_size(swap_device) / SECTORS_PER_PAGE);
-  if (swap_map == NULL)
-    PANIC("swap section creation failed! -- swap device is too large");
+struct swap_item{
+    index_t index;
+//    struct hash_elem hash_elem;
+    struct list_elem list_elem;
+};
+
+//struct hash swap_table;
+static struct list swap_free_list;
+struct block* swap_block;
+index_t top_index = 0;
+
+index_t get_free_swap_slot();
+//bool swap_hash_less(const struct hash_elem *a,
+//                     const struct hash_elem *b,
+//                     void *aux UNUSED);
+//unsigned swap_hash(const struct hash_elem *e,
+//                    void* aux UNUSED);
+
+
+
+void swap_init(){
+  swap_block = block_get_role(BLOCK_SWAP);
+  ASSERT(swap_block != NULL);
+  list_init(&swap_free_list);
 }
 
-block_sector_t swap_write(void *kpage)
-{
-  int i;
-  block_sector_t sector;
 
-  if (!swap_map_allocate(&sector))
-    PANIC("no swap space");
-
-  for (i = 0; i < SECTORS_PER_PAGE; i++, sector++, kpage += BLOCK_SECTOR_SIZE)
-    block_write(swap_device, sector, kpage);
-  return sector - SECTORS_PER_PAGE;
+index_t swap_store(void *kpage){
+  ASSERT(is_kernel_vaddr(kpage));
+  index_t index = get_free_swap_slot();
+  if (index == (index_t)-1)
+    return index;
+  for (int i = 0; i < BLOCK_PER_PAGE; i++){
+    block_write(swap_block, index + i, kpage + i * BLOCK_SECTOR_SIZE);
+  }
+  return index;
 }
 
-void swap_read(block_sector_t sector, void *kpage)
-{
-  int i;
+void swap_load(index_t index, void *kpage){
+  ASSERT(index != (index_t)-1);
+  ASSERT(is_kernel_vaddr(kpage));
+  ASSERT(index % BLOCK_PER_PAGE == 0);
 
-  for (i = 0; i < SECTORS_PER_PAGE; i++, sector++, kpage += BLOCK_SECTOR_SIZE)
-    block_read(swap_device, sector, kpage);
-  swap_release(sector - SECTORS_PER_PAGE);
+  for (int i = 0; i < BLOCK_PER_PAGE; i++){
+    block_read(swap_block, index + i, kpage + i * BLOCK_SECTOR_SIZE);
+  }
+  swap_free(index);
 }
 
-void swap_release(block_sector_t sector)
-{
-  swap_map_release(sector);
+void swap_free(index_t index){
+  ASSERT(index % BLOCK_PER_PAGE == 0);
+
+  if (top_index == index + BLOCK_PER_PAGE)
+    top_index = index;
+  else{
+    struct swap_item* t = malloc(sizeof(struct swap_item));
+    t->index = index;
+    list_push_back(&swap_free_list, &t->list_elem);
+  }
 }
 
-static bool swap_map_allocate(block_sector_t *sector_page)
-{
-  block_sector_t sector = bitmap_scan_and_flip(swap_map, 0, 1, false);
-  if(sector != BITMAP_ERROR)
-    *sector_page = sector * SECTORS_PER_PAGE;
-  return sector != BITMAP_ERROR;
+
+index_t get_free_swap_slot(){
+  index_t res = (index_t)-1;
+  if (list_empty(&swap_free_list)){
+    if (top_index + BLOCK_PER_PAGE < block_size(swap_block)){
+      res = top_index;
+      top_index += BLOCK_PER_PAGE;
+    }
+  }
+  else{
+    struct swap_item* t = list_entry(list_front(&swap_free_list), struct swap_item, list_elem);
+    list_remove(&t->list_elem);
+    res = t->index;
+    free(t);
+  }
+  return res;
 }
 
-static void swap_map_release(block_sector_t sector)
-{
-  ASSERT(bitmap_all (swap_map, sector / SECTORS_PER_PAGE, 1));
-  bitmap_set_multiple (swap_map, sector / SECTORS_PER_PAGE, 1, false);
-}
+//
+//
+//bool frame_hash_less(const struct hash_elem *a, const struct hash_elem *b, void *aux UNUSED){
+//  const struct swap_item * ta = hash_entry(a, struct swap_item, hash_elem);
+//  const struct swap_item * tb = hash_entry(b, struct swap_item, hash_elem);
+//  if (ta->pd == tb->pd)
+//    return ta->upage < tb->upage;
+//  return ta->pd < tb->pd;
+//}
+//
+//unsigned frame_hash(const struct hash_elem *e, void* aux UNUSED){
+//  struct swap_item* t = hash_entry(e, struct swap_item, hash_elem);
+//  return hash_bytes(&t->pd, sizeof(t->pd) + sizeof(t->upage));
+//}

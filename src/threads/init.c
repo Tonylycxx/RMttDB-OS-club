@@ -28,12 +28,16 @@
 #include "userprog/gdt.h"
 #include "userprog/syscall.h"
 #include "userprog/tss.h"
-#include "vm/frame.h"
-#include "vm/page.h"
-#include "vm/swap.h"
 #else
 #include "tests/threads/tests.h"
 #endif
+
+#ifdef VM
+#include "vm/frame.h"
+#include "vm/page.h"
+#include "vm/swap.h"
+#endif
+
 #ifdef FILESYS
 #include "devices/block.h"
 #include "devices/ide.h"
@@ -115,7 +119,6 @@ int main(void)
 #ifdef USERPROG
   exception_init();
   syscall_init();
-  init_frame_table();
 #endif
 
   /* Start thread scheduler and enable interrupts. */
@@ -130,8 +133,13 @@ int main(void)
   filesys_init(format_filesys);
 #endif
 
-#ifdef USERPROG
+#ifdef VM
+  page_lock_init();
+  frame_init();
   swap_init();
+#endif
+
+#ifdef USERPROG
 #endif
 
   printf("Boot complete.\n");

@@ -4,8 +4,9 @@
 #include <debug.h>
 #include <list.h>
 #include <stdint.h>
+#include "filesys/file.h"
+#include "userprog/syscall.h"
 #include "threads/synch.h"
-#include "vm/mmap.h"
 
 /* States in a thread's life cycle. */
 enum thread_status
@@ -20,6 +21,8 @@ enum thread_status
    You can redefine this to whatever type you like. */
 typedef int tid_t;
 #define TID_ERROR ((tid_t)-1) /* Error value for tid_t. */
+
+typedef int mapid_t;
 
 /* Thread priorities. */
 #define PRI_MIN 0      /* Lowest priority. */
@@ -107,8 +110,10 @@ struct thread
    struct file *this_file;   /* Pointer points to the executable file current process running */
    bool load_result;         /* A boolean variable used to make sure whether a child process is successfully loaded */
 
-   void *user_esp;
-   struct mmap *mfiles;
+   struct hash *page_table;
+   void *esp;
+   struct list mmap_file_list;
+   mapid_t next_mapid;
 
 #ifdef USERPROG
    /* Owned by userprog/process.c. */
@@ -134,6 +139,21 @@ struct opened_file
    struct file *f;        /* Pointer points to a file */
    int fd;                /* This file's fd (might be different according to process) */
    struct list_elem elem; /* List elem to make a list */
+};
+
+struct mmap_handler
+{
+   mapid_t mapid;
+   struct file *mmap_file;
+   void *mmap_addr;
+   int num_page;
+   int last_page_size;
+   struct list_elem elem;
+   bool writable;
+   bool is_segment;
+   bool is_static_data;
+   int num_page_with_segment;
+   off_t file_ofs;
 };
 
 /* If false (default), use round-robin scheduler.

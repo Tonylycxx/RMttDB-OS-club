@@ -5,103 +5,341 @@
 #include <hash.h>
 #include "devices/block.h"
 #include "filesys/inode.h"
+#include "threads/vaddr.h"
+#include "threads/thread.h"
+#include "userprog/pagedir.h"
 #include "vm/frame.h"
 #include "vm/page.h"
+#include "vm/swap.h"
 
-struct page *create_page_without_param(void)
+#define PAGE_PAL_FLAG 0
+#define PAGE_INST_MARGIN 32
+#define PAGE_STACK_SIZE 0x800000
+#define PAGE_STACK_UNDERLINE (PHYS_BASE - PAGE_STACK_SIZE)
+
+static bool page_hash_less(const struct hash_elem *lhs, const struct hash_elem *rhs, void *aux UNUSED);
+static unsigned page_hash(const struct hash_elem *e, void *aux UNUSED);
+
+static void page_destroy_frame_likes(struct hash_elem *e, void *aux UNUSED);
+
+static struct lock page_lock;
+
+void page_lock_init()
 {
-  struct page *new_page = (struct page *)calloc(1, sizeof(struct page));
-  return new_page;
+  lock_init(&page_lock);
 }
 
-struct page *create_page_with_param(const void *upage, int type, uint8_t writable, uint32_t *pd, struct file *f, off_t offset, const void *kpage)
+page_table_t *page_create()
 {
-  struct page *new_page = (struct page *)calloc(1, sizeof(struct page));
-  page_set_upage(new_page, upage);
-  page_set_type(new_page, type);
-  page_set_writable(new_page, writable);
-  page_set_pagedir(new_page, pd);
-  page_set_fileinfo(new_page, f, offset);
-  page_set_kpage(new_page, kpage);
-}
+  page_table_t *pt = (page_table_t *)malloc(sizeof(page_table_t));
 
-void destroy_page(struct page *p)
-{
-  free(p);
-}
-
-void page_set_upage(struct page *p, const void *upage)
-{
-  p->upage = upage;
-}
-
-void page_set_type(struct page *p, int type)
-{
-  p->page_type = type;
-}
-
-void page_set_writable(struct page *p, uint8_t writable)
-{
-  p->writable = writable;
-}
-
-void page_set_pagedir(struct page *p, uint32_t *pd)
-{
-  p->pd = pd;
-}
-
-void page_set_fileinfo(struct page *p, struct file *file, off_t offset)
-{
-  p->data.file_info.file = file;
-  p->data.file_info.file_end_offset = offset;
-}
-
-void page_set_kpage(struct page *p, const void *kpage)
-{
-  p->data.kpage = kpage;
-}
-
-unsigned frame_hash(const struct hash_elem *e, void *aux UNUSED)
-{
-  struct frame *f = hash_entry(e, struct frame, ft_hash_elem);
-  struct page *p;
-  block_sector_t sector;
-
-  ASSERT(!list_empty(&f->pages));
-  p = list_entry(list_front(&f->pages), struct page, elem);
-  ASSERT(p->page_type & PAGE_TYPE_FILE && p->writable == 0);
-  sector = inode_get_inumber(file_get_inode(p->data.file_info.file));
-  return hash_bytes(&sector, sizeof sector) ^
-         hash_bytes(&p->data.file_info.file_end_offset, sizeof p->data.file_info.file_end_offset);
-}
-
-bool frame_less(const struct hash_elem *a, const struct hash_elem *b, void *aux UNUSED)
-{
-  struct frame *f_1 = hash_entry(a, struct frame, ft_hash_elem);
-  struct frame *f_2 = hash_entry(b, struct frame, ft_hash_elem);
-  ASSERT(!list_empty(&f_1->pages));
-  ASSERT(!list_empty(&f_2->pages));
-
-  struct page *p_1 = list_entry(list_front(&f_1->pages), struct page, elem);
-  struct page *p_2 = list_entry(list_front(&f_2->pages), struct page, elem);
-  ASSERT(p_1->page_type & PAGE_TYPE_FILE && p_1->writable == 0);
-  ASSERT(p_2->page_type & PAGE_TYPE_FILE && p_2->writable == 0);
-
-  block_sector_t sector_1 = inode_get_inumber(file_get_inode(p_1->data.file_info.file));
-  block_sector_t sector_2 = inode_get_inumber(file_get_inode(p_2->data.file_info.file));
-
-  if (sector_1 < sector_2)
-    return true;
-  else if (sector_1 > sector_2)
-    return false;
+  if (pt != NULL)
+  {
+    if (page_init(pt) == false)
+    {
+      free(pt);
+      return NULL;
+    }
+    else
+    {
+      return pt;
+    }
+  }
   else
   {
-    off_t off_1 = p_1->data.file_info.file_end_offset;
-    off_t off_2 = p_2->data.file_info.file_end_offset;
-
-    if (off_1 < off_2)
-      return true;
-    else
-      return false;
+    return NULL;
   }
+}
+
+bool page_init(page_table_t *page_table)
+{
+  return hash_init(page_table, page_hash, page_hash_less, NULL);
+}
+
+void page_destroy(page_table_t *page_table)
+{
+  lock_acquire(&page_lock);
+  hash_destroy(page_table, page_destroy_frame_likes);
+  lock_release(&page_lock);
+}
+
+struct page_table_elem *page_find(page_table_t *page_table, void *upage)
+{
+  struct hash_elem *e;
+  struct page_table_elem tmp;
+
+  ASSERT(page_table != NULL);
+  tmp.key = upage;
+  e = hash_find(page_table, &(tmp.elem));
+
+  if (e != NULL)
+    return hash_entry(e, struct page_table_elem, elem);
+  else
+    return NULL;
+}
+
+bool page_pagefault_handler(const void *vaddr, bool to_write, void *esp)
+{
+  struct thread *cur = thread_current();
+  page_table_t *page_table = cur->page_table;
+  uint32_t *pagedir = cur->pagedir;
+  void *upage = pg_round_down(vaddr);
+
+  bool success = true;
+  lock_acquire(&page_lock);
+  struct page_table_elem *t = page_find(page_table, upage);
+  void *dst = NULL;
+
+  ASSERT(is_user_vaddr(vaddr));
+  ASSERT(!(t != NULL && t->status == FRAME));
+
+  if (to_write == true && t != NULL && t->writable == false)
+    return false;
+
+  if (upage >= PAGE_STACK_UNDERLINE)
+  {
+    if (vaddr >= esp - PAGE_INST_MARGIN)
+    {
+      if (t == NULL)
+      {
+        dst = frame_get_frame(PAGE_PAL_FLAG, upage);
+        if (dst == NULL)
+          success = false;
+        else
+        {
+          t = (struct page_table_elem *)malloc(sizeof(struct page_table_elem));
+          t->key = upage;
+          t->value = dst;
+          t->status = FRAME;
+          t->writable = true;
+          t->origin = NULL;
+          hash_insert(page_table, &t->elem);
+        }
+      }
+      else
+      {
+        switch (t->status)
+        {
+        case SWAP:
+          dst = frame_get_frame(PAGE_PAL_FLAG, upage);
+          if (dst == NULL)
+          {
+            success = false;
+            break;
+          }
+          swap_load((index_t)t->value, dst);
+          t->value = dst;
+          t->status = FRAME;
+          break;
+
+        default:
+          success = false;
+        }
+      }
+    }
+    else
+      success = false;
+  }
+  else
+  {
+    if (t == NULL)
+      success = false;
+    else
+    {
+      switch (t->status)
+      {
+      case SWAP:
+        dst = frame_get_frame(PAGE_PAL_FLAG, upage);
+        if (dst == NULL)
+        {
+          success = false;
+          break;
+        }
+        swap_load((index_t)t->value, dst);
+        t->value = dst;
+        t->status = FRAME;
+        break;
+
+      case FILE:
+        dst = frame_get_frame(PAGE_PAL_FLAG, upage);
+        if (dst == NULL)
+        {
+          success = false;
+          break;
+        }
+        mmap_read_file(t->value, upage, dst);
+        t->value = dst;
+        t->status = FRAME;
+        break;
+
+      default:
+        success = false;
+      }
+    }
+  }
+
+  frame_set_pinned_false(dst);
+  lock_release(&page_lock);
+  if (success)
+    ASSERT(pagedir_set_page(pagedir, t->key, t->value, t->writable));
+  return success;
+}
+
+bool page_set_frame(void *upage, void *kapge, bool writable)
+{
+  struct thread *cur = thread_current();
+  page_table_t *page_table = cur->page_table;
+  uint32_t *pagedir = cur->pagedir;
+
+  bool success = true;
+  lock_acquire(&page_lock);
+
+  struct page_table_elem *t = page_find(page_table, upage);
+  if (t == NULL)
+  {
+    t = (struct page_table_elem *)malloc(sizeof(struct page_table_elem));
+    t->key = upage;
+    t->value = kapge;
+    t->status = FRAME;
+    t->origin = NULL;
+    t->writable = writable;
+    hash_insert(page_table, &t->elem);
+  }
+  else
+    success = false;
+  lock_release(&page_lock);
+  if (success)
+    ASSERT(pagedir_set_page(pagedir, t->key, t->value, t->writable));
+  return success;
+}
+
+bool page_available_upage(page_table_t *page_table, void *upage)
+{
+  return upage < PAGE_STACK_UNDERLINE && page_find(page_table, upage) == NULL;
+}
+
+bool page_accessible_upage(page_table_t *page_table, void *upage)
+{
+  return upage < PAGE_STACK_UNDERLINE && page_find(page_table, upage) != NULL;
+}
+
+bool page_install_file(page_table_t *page_table, struct mmap_handler *mh, void *key)
+{
+  struct thread *cur = thread_current();
+  bool success = true;
+  lock_acquire(&page_lock);
+  if (page_available_upage(page_table, key))
+  {
+    struct page_table_elem *e = (struct page_table_elem *)malloc(sizeof(struct page_table_elem));
+    e->key = key;
+    e->value = mh;
+    e->status = FILE;
+    e->writable = mh->writable;
+    e->origin = mh;
+    hash_insert(page_table, &e->elem);
+  }
+  else
+    success = false;
+  lock_release(&page_lock);
+  return success;
+}
+
+bool page_unmap(page_table_t *page_table, void *upage)
+{
+  struct thread *cur = thread_current();
+  bool success = true;
+  lock_acquire(&page_lock);
+
+  if (page_accessible_upage(page_table, upage))
+  {
+    struct page_table_elem *t = page_find(page_table, upage);
+
+    ASSERT(t != NULL);
+    switch (t->status)
+    {
+    case FILE:
+      hash_delete(page_table, &t->elem);
+      free(t);
+      break;
+
+    case FRAME:
+      if (pagedir_is_dirty(cur->pagedir, t->key))
+        mmap_write_file(t->origin, t->key, t->value);
+      pagedir_clear_page(cur->pagedir, t->key);
+      hash_delete(page_table, &t->elem);
+      frame_free_frame(t->value);
+      free(t);
+      break;
+
+    default:
+      success = false;
+    }
+  }
+  else
+    success = false;
+  lock_release(&page_lock);
+  return success;
+}
+
+bool page_status_eviction(struct thread *cur, void *upage, void *index, bool to_swap)
+{
+  struct page_table_elem *t = page_find(cur->page_table, upage);
+  bool success = true;
+
+  if (t != NULL && t->status == FRAME)
+  {
+    if (to_swap)
+    {
+      t->value = index;
+      t->status = SWAP;
+    }
+    else
+    {
+      ASSERT(t->origin != NULL);
+      t->value = t->origin;
+      t->status = FILE;
+    }
+    pagedir_clear_page(cur->pagedir, upage);
+  }
+  else {
+    if(t != NULL)
+      printf("%s\n", t->status == FILE ? "file" : "swap");
+    else
+      puts("NULL");
+    success = false;
+  }
+  return success;
+}
+
+bool page_hash_less(const struct hash_elem *lhs, const struct hash_elem *rhs, void *aux UNUSED)
+{
+  return hash_entry(lhs, struct page_table_elem, elem)->key < hash_entry(rhs, struct page_table_elem, elem)->key;
+}
+
+unsigned page_hash(const struct hash_elem *e, void *aux UNUSED)
+{
+  struct page_table_elem *t = hash_entry(e, struct page_table_elem, elem);
+  return hash_bytes(&t->key, sizeof(t->key));
+}
+
+void page_destroy_frame_likes(struct hash_elem *e, void *aux UNUSED)
+{
+  struct page_table_elem *t = hash_entry(e, struct page_table_elem, elem);
+
+  if(t->status == FRAME)
+  {
+    pagedir_clear_page(thread_current()->pagedir, t->key);
+    frame_free_frame(t->value);
+  }
+  else if(t->status == SWAP)
+    swap_free((index_t) t->value);
+  free(t);
+}
+
+struct page_table_elem *page_find_with_lock(page_table_t *page_table, void *upage)
+{
+  lock_acquire(&page_lock);
+  struct page_table_elem *tmp = page_find(page_table, upage);
+  lock_release(&page_lock);
+  return tmp;
 }

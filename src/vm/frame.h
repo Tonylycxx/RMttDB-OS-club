@@ -4,25 +4,28 @@
 #include <stdbool.h>
 #include <list.h>
 #include <hash.h>
-#include "threads/synch.h"
+#include "threads/palloc.h"
 
-struct frame
+struct frame_item
 {
-  void *kpage;
-  bool io;
-  unsigned short fm_lock;
-
-  struct condition io_done;
-  struct list_elem ft_elem;
-  struct hash_elem ft_hash_elem;
-  struct list pages;
+  void *frame;
+  void *upage;
+  struct thread *t;
+  bool pinned;
+  struct hash_elem hash_elem;
+  struct list_elem list_elem;
 };
 
-void init_frame_table(void);
-void init_frame(struct frame *f);
+void *frame_lookup(void *frame);
 
-bool ft_load_frame(uint32_t *pd, const void *upage, bool write);
-void ft_unload_frame(uint32_t *pd, const void *upage);
-bool ft_lock_frame(uint32_t *pd, const void *upage, bool write);
-void ft_unlock_frame(uint32_t *pd, const void *upage);
+void frame_init();
+
+void *frame_get_frame(enum palloc_flags flag, void *upage);
+
+void frame_free_frame(void *frame);
+
+bool frame_get_pinned(void *frame);
+
+bool frame_set_pinned_false(void *frame);
+
 #endif

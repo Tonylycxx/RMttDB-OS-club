@@ -11,6 +11,10 @@
         "ostream": "c",
         "sstream": "c",
         "streambuf": "c",
-        "atomic": "c"
+        "atomic": "c",
+        "page.h": "c",
+        "pagedir.h": "c",
+        "swap.h": "c",
+        "syscall.h": "c"
     }
 }
