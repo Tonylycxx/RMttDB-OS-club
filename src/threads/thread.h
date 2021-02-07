@@ -4,9 +4,8 @@
 #include <debug.h>
 #include <list.h>
 #include <stdint.h>
-#include "filesys/file.h"
-#include "userprog/syscall.h"
 #include "threads/synch.h"
+#include "filesys/file.h"
 
 /* States in a thread's life cycle. */
 enum thread_status
@@ -22,12 +21,27 @@ enum thread_status
 typedef int tid_t;
 #define TID_ERROR ((tid_t)-1) /* Error value for tid_t. */
 
-typedef int mapid_t;
-
 /* Thread priorities. */
 #define PRI_MIN 0      /* Lowest priority. */
 #define PRI_DEFAULT 31 /* Default priority. */
 #define PRI_MAX 63     /* Highest priority. */
+#define MAX_FILES_OPEN 20
+
+struct thread_dying_status
+{
+   tid_t tid;
+   int exit_code;
+   struct list_elem elem;
+};
+
+/*
+ * file control block for thread_fcb
+ */
+struct thread_fcb
+{
+   struct file *open_fileptr;
+   int is_using;
+};
 
 /* A kernel thread or user process.
 
@@ -98,68 +112,44 @@ struct thread
    /* Shared between thread.c and synch.c. */
    struct list_elem elem; /* List element. */
 
-   int64_t blocked_ticks; /* Number of ticks thread has blocked */
-
-   int ret_val;                  /* Thread's return value, used in syscall exit() */
-   struct semaphore wait_child;  /* A semaphore used to synchronize with parent thread, in order to transmit information during creating a new thread */
-   struct thread *parent_thread; /* Pointer points to parent thread, used to synchronize with parent thread */
-   struct list child_list;       /* A list includes all the child threads */
-
-   struct list opened_files; /* A list includes all thread's opened filed */
-   int cur_fd;               /* Next fd allocate to next open file */
-   struct file *this_file;   /* Pointer points to the executable file current process running */
-   bool load_result;         /* A boolean variable used to make sure whether a child process is successfully loaded */
-
-   struct hash *page_table;
-   void *esp;
-   struct list mmap_file_list;
-   mapid_t next_mapid;
-
 #ifdef USERPROG
    /* Owned by userprog/process.c. */
-   uint32_t *pagedir; /* Page directory. */
+   uint32_t *pagedir;       /* Page directory. */
+   /* member for userprog*/ /* struct to control the file thread opened */
 #endif
+   int exit_code;
+   int loading_success;
+   int child_exit_code;
+   int is_being_waited;
+
+   int64_t wakeup_time;         /* Time to wake this thread up. */
+   struct list_elem timer_elem; /* Element in timer_wait_list. */
+   struct semaphore timer_sema;
+
+   struct thread *father;
+   struct list_elem child_elem;
+   struct list dying_c_status;
+   struct list child_list;
+   struct list mmap_list;
+   int next_mid;
+   struct semaphore sema_for_load;
+   struct semaphore sema_for_wait;
+
+   struct file *executing_file;
+   struct thread_fcb open_files[MAX_FILES_OPEN];
+
+   //p3
+   struct hash *pages;
+   void *user_esp;
 
    /* Owned by thread.c. */
    unsigned magic; /* Detects stack overflow. */
 };
 
-/* Struct to save child processes infomation */
-struct saved_child
-{
-   tid_t tid;             /* This thread's tid */
-   int ret_val;           /* This thread's return value used in syscall exit() */
-   struct list_elem elem; /* List elem to make a list */
-   struct semaphore sema; /* Semaphore used in syscall wait() to wait a certain child process(thread) */
-};
-
-/* Struct to save a thread's opened files */
-struct opened_file
-{
-   struct file *f;        /* Pointer points to a file */
-   int fd;                /* This file's fd (might be different according to process) */
-   struct list_elem elem; /* List elem to make a list */
-};
-
-struct mmap_handler
-{
-   mapid_t mapid;
-   struct file *mmap_file;
-   void *mmap_addr;
-   int num_page;
-   int last_page_size;
-   struct list_elem elem;
-   bool writable;
-   bool is_segment;
-   bool is_static_data;
-   int num_page_with_segment;
-   off_t file_ofs;
-};
-
 /* If false (default), use round-robin scheduler.
    If true, use multi-level feedback queue scheduler.
    Controlled by kernel command-line option "-o mlfqs". */
-bool thread_mlfqs;
+extern bool thread_mlfqs;
 
 void thread_init(void);
 void thread_start(void);
@@ -191,14 +181,5 @@ int thread_get_nice(void);
 void thread_set_nice(int);
 int thread_get_recent_cpu(void);
 int thread_get_load_avg(void);
-
-void thread_blocked_check(struct thread *t, void *aux UNUSED);
-
-void acquire_file_lock(void);
-void release_file_lock(void);
-
-void save_wait_info(void);
-void free_children(void);
-void free_opened_files(void);
 
 #endif /* threads/thread.h */

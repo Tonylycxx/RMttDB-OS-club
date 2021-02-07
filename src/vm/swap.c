@@ -1,86 +1,76 @@
-//
-// Created by sjtu-ypm on 19-4-11.
-//
+#include "vm/swap.h"
+#include <stdio.h>
+#include "vm/frame.h"
+#include "vm/page.h"
+#include "threads/synch.h"
+#include "threads/vaddr.h"
 
+#define PAGE_SECTORS (PGSIZE / BLOCK_SECTOR_SIZE)
 
-#include <lib/debug.h>
-#include <threads/pte.h>
-#include <threads/malloc.h>
-#include "swap.h"
-#include "../lib/kernel/hash.h"
-
-const int BLOCK_PER_PAGE = PGSIZE / BLOCK_SECTOR_SIZE;
-
-
-struct swap_item{
-    index_t index;
-//    struct hash_elem hash_elem;
-    struct list_elem list_elem;
-};
-
-//struct hash swap_table;
-static struct list swap_free_list;
-struct block* swap_block;
-index_t top_index = 0;
-
-index_t get_free_swap_slot();
-
-void swap_init(){
-  swap_block = block_get_role(BLOCK_SWAP);
-  ASSERT(swap_block != NULL);
-  list_init(&swap_free_list);
-}
-
-
-index_t swap_store(void *kpage){
-  ASSERT(is_kernel_vaddr(kpage));
-  index_t index = get_free_swap_slot();
-  if (index == (index_t)-1)
-    return index;
-  for (int i = 0; i < BLOCK_PER_PAGE; i++){
-    block_write(swap_block, index + i, kpage + i * BLOCK_SECTOR_SIZE);
+void swap_init (void) {
+  swap_block = block_get_role (BLOCK_SWAP);
+  if (swap_block == NULL) {
+    printf ("block_get_role() error!\n");
+    return;
   }
-  return index;
-}
-
-void swap_load(index_t index, void *kpage){
-  ASSERT(index != (index_t)-1);
-  ASSERT(is_kernel_vaddr(kpage));
-  ASSERT(index % BLOCK_PER_PAGE == 0);
-
-  for (int i = 0; i < BLOCK_PER_PAGE; i++){
-    block_read(swap_block, index + i, kpage + i * BLOCK_SECTOR_SIZE);
-  }
-  swap_free(index);
-}
-
-void swap_free(index_t index){
-  ASSERT(index % BLOCK_PER_PAGE == 0);
-
-  if (top_index == index + BLOCK_PER_PAGE)
-    top_index = index;
-  else{
-    struct swap_item* t = malloc(sizeof(struct swap_item));
-    t->index = index;
-    list_push_back(&swap_free_list, &t->list_elem);
+  lock_init(&swap_lock);
+  list_init(&swap_list);
+  for (int i=0; i<(block_size(swap_block)/PAGE_SECTORS); i++) {
+    struct swap_item *item  = malloc(sizeof(struct swap_item));
+		item->flag = true;
+		item->index = i*PAGE_SECTORS;
+		if(item == NULL) return;
+		list_push_back(&swap_list, &item->elem);
   }
 }
 
+struct swap_item *get_swap_item_by_index(unsigned int index) {
+	if(list_empty(&swap_list)) return NULL;
+	struct swap_item * item;
+	for(struct list_elem *e=list_begin(&swap_list); e!=list_end(&swap_list); e=list_next(e)) {
+		item = list_entry(e, struct swap_item, elem);
+		if(item->index == index)
+		break;
+	}
+	return item;
+}
 
-index_t get_free_swap_slot(){
-  index_t res = (index_t)-1;
-  if (list_empty(&swap_free_list)){
-    if (top_index + BLOCK_PER_PAGE < block_size(swap_block)){
-      res = top_index;
-      top_index += BLOCK_PER_PAGE;
+void swap_in(struct page *p) {
+  for (int i=0; i<PAGE_SECTORS; i++) {
+    block_read(swap_block, p->page_sector+i, p->page_frame->address_start + i*BLOCK_SECTOR_SIZE);
+  }
+  struct swap_item * item = get_swap_item_by_index(p->page_sector);
+  item->flag = true;
+  p->page_sector = -1;
+}
+
+
+bool swap_out(struct page *p) {
+  lock_acquire(&swap_lock);
+	unsigned int index = -1;
+	for (struct list_elem *e=list_begin(&swap_list); e!=list_end(&swap_list); e=list_next(e)) {
+		struct swap_item *item = list_entry(e, struct swap_item, elem);
+		if (item->flag == true) {
+			item->flag = false;
+			index = item->index;
+			break;
     }
   }
-  else{
-    struct swap_item* t = list_entry(list_front(&swap_free_list), struct swap_item, list_elem);
-    list_remove(&t->list_elem);
-    res = t->index;
-    free(t);
+  if (index == -1) {
+		lock_release(&swap_lock);
+		return false;
+	}
+
+  p->page_sector = index;
+  for (int i=0; i<PAGE_SECTORS; i++) {
+    block_write(swap_block, p->page_sector + i, (uint8_t *) p->page_frame->address_start + i * BLOCK_SECTOR_SIZE);
   }
-  return res;
+  lock_release (&swap_lock);
+  
+  p->private = false;
+  p->page_file = NULL;
+  p->file_offset = 0;
+  p->file_bytes = 0;
+
+  return true;
 }
-//}

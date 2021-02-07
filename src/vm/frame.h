@@ -1,31 +1,17 @@
-#ifndef VM_FRAME_H
-#define VM_FRAME_H
-
 #include <stdbool.h>
-#include <list.h>
-#include <hash.h>
-#include "threads/palloc.h"
+#include "threads/synch.h"
 
-struct frame_item
-{
-  void *frame;
-  void *upage;
-  struct thread *t;
-  bool pinned;
-  struct hash_elem hash_elem;
-  struct list_elem list_elem;
-};
+ struct frame
+ {
+    struct thread * thread_belong_to;
+    void * address_start;
+    struct lock use_lock;
+    struct page * page;
+ };
 
-void *frame_lookup(void *frame);
-
-void frame_init();
-
-void *frame_get_frame(enum palloc_flags flag, void *upage);
-
-void frame_free_frame(void *frame);
-
-bool frame_get_pinned(void *frame);
-
-bool frame_set_pinned_false(void *frame);
-
-#endif
+void  frame_table_init(void);
+void frame_lock(struct page* p);
+void frame_free(struct frame * f);
+void  frame_unlock(struct frame *f);
+struct frame * try_alloc_frame(struct page * page);
+struct frame * alloc_frame(struct page * page);

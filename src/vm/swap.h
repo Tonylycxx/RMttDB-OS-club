@@ -1,17 +1,22 @@
 #ifndef VM_SWAP_H
-#define VM_SWAP_H
+#define VM_SWAP_H 1
 
+#include <stdbool.h>
+#include <list.h>
+#include "vm/page.h"
 
-#include "../devices/block.h"
+static struct lock swap_lock;
+static struct block *swap_block;
+struct list swap_list;
 
-typedef  block_sector_t index_t;
+struct swap_item {
+	bool flag;
+	unsigned int index;
+    struct list_elem elem;
+};
+void swap_init (void);
+struct swap_item *get_swap_item_by_index(unsigned int);
+void swap_in(struct page *);
+bool swap_out(struct page *);
 
-void swap_init();
-
-index_t swap_store(void *kpage);
-
-void swap_load(index_t index, void *kpage);
-
-void swap_free(index_t index);
-
-#endif
+#endif /* vm/swap.h */

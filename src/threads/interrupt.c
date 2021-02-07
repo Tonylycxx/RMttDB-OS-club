@@ -20,7 +20,7 @@
 
 /* Number of x86 interrupts. */
 #define INTR_CNT 256
-
+#define STACK_MAX (1024 * 1024)
 /* The Interrupt Descriptor Table (IDT).  The format is fixed by
    the CPU.  See [IA32-v3a] sections 5.10 "Interrupt Descriptor
    Table (IDT)", 5.11 "IDT Descriptors", 5.12.1.2 "Flag Usage By
@@ -360,7 +360,10 @@ intr_handler (struct intr_frame *frame)
       in_external_intr = true;
       yield_on_return = false;
     }
-
+  if(frame->esp <= PHYS_BASE && frame->esp >= PHYS_BASE - STACK_MAX) {
+    thread_current()->user_esp = frame->esp;
+  }
+  
   /* Invoke the interrupt's handler. */
   handler = intr_handlers[frame->vec_no];
   if (handler != NULL)

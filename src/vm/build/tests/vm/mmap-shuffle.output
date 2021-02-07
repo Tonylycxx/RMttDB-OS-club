@@ -1,0 +1,55 @@
+Copying tests/vm/mmap-shuffle to scratch partition...
+squish-pty bochs -q
+========================================================================
+                       Bochs x86 Emulator 2.6.7
+              Built from SVN snapshot on November 2, 2014
+                  Compiled on Sep 15 2020 at 23:09:56
+========================================================================
+PiLo hda1
+Loading............
+Kernel command line: -q -f extract run mmap-shuffle
+Pintos booting with 4,096 kB RAM...
+383 pages available in kernel pool.
+383 pages available in user pool.
+Calibrating timer...  204,600 loops/s.
+hda: 13,104 sectors (6 MB), model "BXHD00011", serial "Generic 1234"
+hda1: 192 sectors (96 kB), Pintos OS kernel (20)
+hda2: 4,096 sectors (2 MB), Pintos file system (21)
+hda3: 113 sectors (56 kB), Pintos scratch (22)
+hda4: 8,192 sectors (4 MB), Pintos swap (23)
+filesys: using hda2
+scratch: using hda3
+swap: using hda4
+Formatting file system...done.
+Boot complete.
+Extracting ustar archive from scratch device into file system...
+Putting 'mmap-shuffle' into the file system...
+Erasing ustar archive...
+Executing 'mmap-shuffle':
+(mmap-shuffle) begin
+(mmap-shuffle) create "buffer"
+(mmap-shuffle) open "buffer"
+(mmap-shuffle) mmap "buffer"
+(mmap-shuffle) init: cksum=3115322833
+(mmap-shuffle) shuffle 0: cksum=1691062564
+(mmap-shuffle) shuffle 1: cksum=1973575879
+(mmap-shuffle) shuffle 2: cksum=1647619479
+(mmap-shuffle) shuffle 3: cksum=96566261
+(mmap-shuffle) shuffle 4: cksum=3885786467
+(mmap-shuffle) shuffle 5: cksum=3022003332
+(mmap-shuffle) shuffle 6: cksum=3614934266
+(mmap-shuffle) shuffle 7: cksum=2704001777
+(mmap-shuffle) shuffle 8: cksum=735775156
+(mmap-shuffle) shuffle 9: cksum=1864109763
+(mmap-shuffle) end
+mmap-shuffle: exit(0)
+Execution of 'mmap-shuffle' complete.
+Timer: 22294 ticks
+Thread: 48 idle ticks, 677 kernel ticks, 21573 user ticks
+hda2 (filesys): 349 reads, 4970 writes
+hda3 (scratch): 112 reads, 2 writes
+hda4 (swap): 0 reads, 0 writes
+Console: 1562 characters output
+Keyboard: 0 keys pressed
+Exception: 39 page faults
+Powering off..

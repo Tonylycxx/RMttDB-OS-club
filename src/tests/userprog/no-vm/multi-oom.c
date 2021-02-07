@@ -84,7 +84,6 @@ consume_some_resources_and_die (int seed)
       case 4:
         open ((char *)PHYS_BASE);
         exit (-1);
-
       default:
         NOT_REACHED ();
     }
