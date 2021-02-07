@@ -24,13 +24,6 @@ struct block* swap_block;
 index_t top_index = 0;
 
 index_t get_free_swap_slot();
-//bool swap_hash_less(const struct hash_elem *a,
-//                     const struct hash_elem *b,
-//                     void *aux UNUSED);
-//unsigned swap_hash(const struct hash_elem *e,
-//                    void* aux UNUSED);
-
-
 
 void swap_init(){
   swap_block = block_get_role(BLOCK_SWAP);
@@ -90,18 +83,4 @@ index_t get_free_swap_slot(){
   }
   return res;
 }
-
-//
-//
-//bool frame_hash_less(const struct hash_elem *a, const struct hash_elem *b, void *aux UNUSED){
-//  const struct swap_item * ta = hash_entry(a, struct swap_item, hash_elem);
-//  const struct swap_item * tb = hash_entry(b, struct swap_item, hash_elem);
-//  if (ta->pd == tb->pd)
-//    return ta->upage < tb->upage;
-//  return ta->pd < tb->pd;
-//}
-//
-//unsigned frame_hash(const struct hash_elem *e, void* aux UNUSED){
-//  struct swap_item* t = hash_entry(e, struct swap_item, hash_elem);
-//  return hash_bytes(&t->pd, sizeof(t->pd) + sizeof(t->upage));
 //}
