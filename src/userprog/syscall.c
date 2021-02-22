@@ -36,6 +36,7 @@ void syscall_init(void)
   intr_register_int(0x30, 3, INTR_ON, syscall_handler, "syscall");
 }
 
+/* If any error or unexceptable problems happen, exit current thread with specific retval */
 void thread_exit_with_retval(struct intr_frame *f, int ret_val)
 {
   struct thread *cur = thread_current();
@@ -60,6 +61,7 @@ struct opened_file *get_op_file(int fd)
   return NULL;
 }
 
+/* Check target address vaddr whether it's legal. */
 bool syscall_check_user_vaddr(const void *vaddr, bool write)
 {
   if (vaddr == NULL || !is_user_vaddr(vaddr) || vaddr <= 0x08048000)
@@ -77,22 +79,24 @@ bool syscall_check_user_vaddr(const void *vaddr, bool write)
 #endif
 }
 
+/* Check a string parameter whether every char in it is legel. */
 bool syscall_check_user_string(const char *ustr)
 {
   if (!syscall_check_user_vaddr(ustr, false))
     return false;
   while (*ustr != '\0')
   {
-    ustr++;
     if (((int)ustr & PGMASK) == 0)
     {
       if (!syscall_check_user_vaddr(ustr, false))
         return false;
     }
+    ustr++;
   }
   return true;
 }
 
+/* Check a buffer parameter whether it's size-aloowed region completely legal. */
 bool syscall_check_user_buffer(const char *ustr, int size, bool write)
 {
   if (!syscall_check_user_vaddr(ustr + size - 1, write))
@@ -429,6 +433,7 @@ void syscall_close(int fd)
   }
 }
 
+/* Check whether address file mapped to are legal. */
 bool mmap_check_mmap_vaddr(struct thread *cur, const void *vaddr, int num_page)
 {
 #ifdef VM
@@ -441,6 +446,7 @@ bool mmap_check_mmap_vaddr(struct thread *cur, const void *vaddr, int num_page)
 #endif
 }
 
+/* Install memory-mapped file's page into threads' page_table. */
 bool mmap_install_page(struct thread *cur, struct mmap_handler *mh)
 {
 #ifdef VM
@@ -457,6 +463,7 @@ bool mmap_install_page(struct thread *cur, struct mmap_handler *mh)
 #endif
 }
 
+/* Read memory-mapped file into physical memory */
 void mmap_read_file(struct mmap_handler *mh, void *upage, void *kpage)
 {
 #ifdef VM
@@ -491,6 +498,7 @@ void mmap_read_file(struct mmap_handler *mh, void *upage, void *kpage)
 #endif
 }
 
+/* Write memory-mapped file into disk. (write back to filesys) */
 void mmap_write_file(struct mmap_handler *mh, void *upage, void *kpage)
 {
 #ifdef VM
@@ -518,6 +526,7 @@ void mmap_write_file(struct mmap_handler *mh, void *upage, void *kpage)
 #endif
 }
 
+/* Load segments. (Memory mapped) */
 bool mmap_load_segment(struct file *file, off_t ofs, uint8_t *upage, uint32_t read_bytes, uint32_t zero_bytes, bool writable)
 {
 #ifdef VM
@@ -549,6 +558,7 @@ bool mmap_load_segment(struct file *file, off_t ofs, uint8_t *upage, uint32_t re
 #endif
 }
 
+/* Syscall handler for syscall mmap */
 void syscall_mmap(struct intr_frame *f, int fd, const void *obj_vaddr)
 {
 #ifdef VM
@@ -606,6 +616,7 @@ void syscall_mmap(struct intr_frame *f, int fd, const void *obj_vaddr)
 #endif
 }
 
+/* Syscall handler for syscall munmap */
 void syscall_munmap(struct intr_frame *f, mapid_t mapid)
 {
 #ifdef VM

@@ -110,10 +110,10 @@ struct thread
    struct file *this_file;   /* Pointer points to the executable file current process running */
    bool load_result;         /* A boolean variable used to make sure whether a child process is successfully loaded */
 
-   struct hash *page_table;
-   void *esp;
-   struct list mmap_file_list;
-   mapid_t next_mapid;
+   struct hash *page_table;      /* Supplemental page table, used to store thread's pages' infomation */
+   void *esp;                    /* Current thread's esp, used to handle page-fault */
+   struct list mmap_file_list;   /* Thread's memory-mapped files list */
+   mapid_t next_mapid;           /* Next mapid current thread can allocate */
 
 #ifdef USERPROG
    /* Owned by userprog/process.c. */
@@ -143,17 +143,17 @@ struct opened_file
 
 struct mmap_handler
 {
-   mapid_t mapid;
-   struct file *mmap_file;
-   void *mmap_addr;
-   int num_page;
-   int last_page_size;
-   struct list_elem elem;
-   bool writable;
-   bool is_segment;
-   bool is_static_data;
-   int num_page_with_segment;
-   off_t file_ofs;
+   mapid_t mapid;             /* Mapid */
+   struct file *mmap_file;    /* Mapped file */
+   void *mmap_addr;           /* Address file mapped to */
+   int num_page;              /* Number of pages used in mapping the file */
+   int last_page_size;        /* Usage of the last page */
+   struct list_elem elem;     /* List_elem used to keep a list */
+   bool writable;             /* Is writable or not */
+   bool is_segment;           /* Is a segment or not */
+   bool is_static_data;       /* Is static or not */
+   int num_page_with_segment; /* Segment's count of pages */
+   off_t file_ofs;            /* Mapping offset of file */
 };
 
 /* If false (default), use round-robin scheduler.

@@ -14,7 +14,7 @@
 
 #define PAGE_PAL_FLAG 0
 #define PAGE_INST_MARGIN 32
-#define PAGE_STACK_SIZE 0x800000
+#define PAGE_STACK_SIZE 0x8000000
 #define PAGE_STACK_UNDERLINE (PHYS_BASE - PAGE_STACK_SIZE)
 
 static bool page_hash_less(const struct hash_elem *lhs, const struct hash_elem *rhs, void *aux UNUSED);

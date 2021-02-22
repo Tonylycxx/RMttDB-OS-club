@@ -24,8 +24,6 @@ void *frame_get_frame(enum palloc_flags flag, void *upage);
 
 void frame_free_frame(void *frame);
 
-bool frame_get_pinned(void *frame);
-
 bool frame_set_pinned_false(void *frame);
 
 #endif

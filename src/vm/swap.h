@@ -1,10 +1,9 @@
 #ifndef VM_SWAP_H
 #define VM_SWAP_H
 
-
 #include "../devices/block.h"
 
-typedef  block_sector_t index_t;
+typedef block_sector_t index_t;
 
 void swap_init();
 

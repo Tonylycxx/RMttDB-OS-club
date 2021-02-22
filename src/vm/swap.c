@@ -1,24 +1,17 @@
-//
-// Created by sjtu-ypm on 19-4-11.
-//
-
-
 #include <lib/debug.h>
 #include <threads/pte.h>
 #include <threads/malloc.h>
-#include "swap.h"
-#include "../lib/kernel/hash.h"
+#include <hash.h>
+#include "vm/swap.h"
 
 const int BLOCK_PER_PAGE = PGSIZE / BLOCK_SECTOR_SIZE;
 
 
 struct swap_item{
     index_t index;
-//    struct hash_elem hash_elem;
     struct list_elem list_elem;
 };
 
-//struct hash swap_table;
 static struct list swap_free_list;
 struct block* swap_block;
 index_t top_index = 0;
@@ -83,4 +76,3 @@ index_t get_free_swap_slot(){
   }
   return res;
 }
-//}
